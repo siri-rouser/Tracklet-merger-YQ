@@ -6,7 +6,8 @@ This repository will help you implementing a SAE pipeline stage by putting all t
 # How-to start
 
 ## Create repository from template
-Create your own repository using this template. It is good practice to prefix the repo name with `sae-` and use a concise name that describes what the stage does.
+Create your own repository using this template. It is good practice to prefix the repo name with `sae-` and use a concise name that describes what the stage does.\
+**Careful:** Check the repository owner, it defaults to your main user account.
 
 ## Check prerequisites
 In order to work with this repository, you need to ensure the following steps:
