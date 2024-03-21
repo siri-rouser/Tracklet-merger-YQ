@@ -5,3 +5,4 @@ redis:
   stream_id: stream1
   input_stream_prefix: objecttracker
   output_stream_prefix: mystage
+prometheus_port: 8000
