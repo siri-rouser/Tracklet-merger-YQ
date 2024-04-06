@@ -16,7 +16,9 @@ In order to work with this repository, you need to ensure the following steps:
 - Clone main SAE repository (you will most likely need a running SAE to do anything useful): https://github.com/starwit/starwit-awareness-engine
 
 ## Replace template name
-To make this repository entirely belong to your new shiny stage, you have to replace `mystage`, `MyStage` and `my_stage` in a few places. You could use the project-wide search to find all occurrences. It is, however, a good opportunity to get familiar with the structure to read and understand all the provided code and configuration yourself (don't worry, it isn't much) and replace the name while doing that.
+To make this repository entirely belong to your new shiny stage, you have to replace various forms of `mystage` in a few places. 
+Run `set_name.sh` and enter the various forms of your new name when prompted. The script will set everything up for you and then delete itself.
+If you made a mistake either reclone the repository or run `git reset --hard && git clean -fd`
 
 ## Setup
 - Run `poetry install`, this should install all necessary dependencies
