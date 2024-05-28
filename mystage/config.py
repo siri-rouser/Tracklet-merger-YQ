@@ -1,12 +1,14 @@
-from pydantic import BaseModel, conint, conlist
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from visionlib.pipeline.settings import LogLevel, YamlConfigSettingsSource
 from typing import List
+
+from pydantic import BaseModel, Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from typing_extensions import Annotated
+from visionlib.pipeline.settings import LogLevel, YamlConfigSettingsSource
 
 
 class RedisConfig(BaseModel):
     host: str = 'localhost'
-    port: conint(ge=1, le=65536) = 6379
+    port: Annotated[int, Field(ge=1, le=65536)] = 6379
     stream_id: str = 'stream1'
     input_stream_prefix: str = 'objecttracker'
     output_stream_prefix: str = 'mystage'
@@ -14,7 +16,7 @@ class RedisConfig(BaseModel):
 class MyStageConfig(BaseSettings):
     log_level: LogLevel = LogLevel.WARNING
     redis: RedisConfig = RedisConfig()
-    prometheus_port: conint(gt=1024, le=65536) = 8000
+    prometheus_port: Annotated[int, Field(ge=1024, le=65536)] = 8000
 
     model_config = SettingsConfigDict(env_nested_delimiter='__')
 
