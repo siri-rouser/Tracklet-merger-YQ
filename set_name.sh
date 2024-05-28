@@ -19,6 +19,7 @@ sed -i "s/my_stage/$stage_name_lsc/" mystage/*.py
 sed -i "s/mystage/$stage_name_ns/" mystage/*.py pyproject.toml settings.template.yaml main.py
 sed -i "s/my-stage/$stage_name_kc/" docker_build.sh docker_push.sh
 mv mystage/ "$stage_name_ns/"
+mv "$stage_name_ns/mystage.py" "$stage_name_ns/$stage_name_ns.py"
 
 echo "# SAE $stage_name_kc" > README.md
 
