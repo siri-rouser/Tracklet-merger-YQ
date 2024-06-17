@@ -1,5 +1,18 @@
 #!/bin/bash
 
+# Check if script was sourced and exit with an error if that is the case
+if [ -n "$BASH_VERSION" ]; then
+    (return 0 2>/dev/null) && sourced=1 || sourced=0
+else
+    echo "Please run this script using bash."
+    return 1
+fi
+
+if [ "$sourced" -eq 1 ]; then
+    echo "Please do not source this script."
+    return 1
+fi
+
 # Sets the stage name (i.e. make this your own) and then deletes itself
 
 read -p "New stage name (lower_snake_case): " stage_name_lsc
