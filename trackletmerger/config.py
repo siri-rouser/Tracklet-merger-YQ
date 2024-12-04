@@ -1,6 +1,6 @@
 from typing import List
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, conlist
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing_extensions import Annotated
 from visionlib.pipeline.settings import LogLevel, YamlConfigSettingsSource
@@ -9,14 +9,19 @@ from visionlib.pipeline.settings import LogLevel, YamlConfigSettingsSource
 class RedisConfig(BaseModel):
     host: str = 'localhost'
     port: Annotated[int, Field(ge=1, le=65536)] = 6379
-    stream_id: str = 'stream1'
+    stream_id: str = 'aggregate'
     input_stream_prefix: str = 'objecttracker'
-    output_stream_prefix: str = 'mystage'
+    output_stream_prefix: str = 'tracklet-merger'
 
-class MyStageConfig(BaseSettings):
+class MergingConfig(BaseModel):
+    input_stream_ids: conlist(str)
+    output_stream_id: str
+
+class TrackletMergerConfig(BaseSettings):
     log_level: LogLevel = LogLevel.WARNING
     redis: RedisConfig = RedisConfig()
     prometheus_port: Annotated[int, Field(ge=1024, le=65536)] = 8000
+    merging_config: MergingConfig
 
     model_config = SettingsConfigDict(env_nested_delimiter='__')
 
