@@ -54,7 +54,7 @@ class TrackletMerger:
             tracklets2 = self._trackletdatabase.data.cameras['stream2'].tracklets
             reid_dict = tracklet_match(logger,frame_image,tracklets1,tracklets2)
 
-        self._trackletdatabase.matching_result_process(stream_id,reid_dict)
+        # self._trackletdatabase.matching_result_process(stream_id,reid_dict,sae_msg)
         self._trackletdatabase.prune(stream_id)
             
         # Your implementation goes (mostly) here
