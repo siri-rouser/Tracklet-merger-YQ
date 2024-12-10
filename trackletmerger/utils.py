@@ -1,72 +1,12 @@
 import numpy as np
-
+import logging
+from typing import Dict
 from visionlib.pipeline.tools import get_raw_frame_data
 from .matching_tool import CostMatrix,calc_reid
 from .trackletdatabase import Trackletdatabase
 import sys
 sys.path.append('../')
 from visionapi_yq.messages_pb2 import SaeMessage, TrackletsByCamera,Trajectory,Tracklet
-
-def tracklet_info_update(stream_id,tracking_output_array,out_features,out_age,sae_msg: SaeMessage):
-    if stream_id not in sae_msg.trajectory.cameras:
-        sae_msg.trajectory.cameras[stream_id].CopyFrom(TrackletsByCamera())
-
-    # tracking_output_arrary = [x1, y1, x2, y2, track_id, confidence,class_id]
-    tracklet = Tracklet()
-
-    for index,output_array in enumerate(tracking_output_array):
-        x1, y1, x2, y2, track_id, confidence, class_id = output_array
-        feature = out_features[index]
-        track_id = str(track_id)
-        if track_id not in sae_msg.trajectory.cameras[stream_id].tracklets:
-            # Create a new Tracklet if it doesn't exist
-            tracklet = Tracklet()
-            tracklet.mean_feature.extend(out_features[index])
-            tracklet.status = 'Active'
-            tracklet.start_time = sae_msg.frame.timestamp_utc_ms
-            tracklet.end_time = sae_msg.frame.timestamp_utc_ms
-            tracklet.age = out_age[index]
-            # for detection_info
-            detection = tracklet.detections_info.add()
-            detection.bounding_box.min_x = x1
-            detection.bounding_box.min_y = y1
-            detection.bounding_box.max_x = x2
-
-            detection.bounding_box.max_y = y2
-            detection.confidence = confidence
-            detection.class_id = int(class_id)
-            detection.feature.extend(out_features[index])
-
-            # Add the new tracklet to the tracklets map
-            sae_msg.trajectory.cameras[stream_id].tracklets[track_id].CopyFrom(tracklet)
-        else:
-            # Update existing Tracklet
-            existing_tracklet = sae_msg.trajectory.cameras[stream_id].tracklets[track_id]
-            previous_feature = np.array(existing_tracklet.mean_feature)
-            out_feature = np.array(feature)
-
-            number_det = len(existing_tracklet.detections_info)
-            updated_mean_feature = (number_det - 1) / number_det * previous_feature + (1 / number_det) * out_feature
-            
-            # Reassign the updated mean_feature to the repeated field
-            del existing_tracklet.mean_feature[:]
-            existing_tracklet.mean_feature.extend(updated_mean_feature)
-            
-            # for detection_info
-            detection = sae_msg.trajectory.cameras[stream_id].tracklets[track_id].detections_info.add()
-            detection.bounding_box.min_x = x1
-            detection.bounding_box.min_y = y1
-            detection.bounding_box.max_x = x2
-            detection.bounding_box.max_y = y2
-            detection.confidence = confidence
-            detection.class_id = int(class_id)
-            detection.feature.extend(out_features[index])
-            sae_msg.trajectory.cameras[stream_id].tracklets[track_id].age = out_age[index]
-            sae_msg.trajectory.cameras[stream_id].tracklets[track_id].end_time = sae_msg.frame.timestamp_utc_ms
-        
-        # tracklet[track_id].detections_info.bounding_box.min_x = x1
-    return sae_msg
-
 
 def tracklet_status_update(stream_id,sae_msg: SaeMessage):
     time_now = sae_msg.frame.timestamp_utc_ms
@@ -82,13 +22,20 @@ def tracklet_status_update(stream_id,sae_msg: SaeMessage):
     return sae_msg
 
 
-def tracklet_match(tracklets1:SaeMessage,tracklets2:SaeMessage):
-    print("Number of tracklets in stream1:", len(tracklets1))
-    print("Number of tracklets in stream2:", len(tracklets2))
+def tracklet_match(logger,image,tracklets1:SaeMessage,tracklets2:SaeMessage):
 
-    if len(tracklets1) != 0 and len(tracklets2) != 0:
+    logger.info(f"Number of tracklets in stream1:{len(tracklets1)}")
+    logger.info(f"Number of tracklets in stream2:{len(tracklets2)}")
 
-        cm = CostMatrix(tracklets1,tracklets2)
+    filtered_tracklets1 = tracklet_filter(logger,image, tracklets1)
+    filtered_tracklets2 = tracklet_filter(logger, image, tracklets2)
+    logger.info(f'tracklets1 length before filter {len(tracklets1)}, and tracklets1 length after filter {len(filtered_tracklets1)}')
+    logger.info(f'tracklets2 length before filter {len(tracklets2)}, and tracklets2 length after filter {len(filtered_tracklets2)}')
+
+
+    if len(filtered_tracklets1) != 0 and len(filtered_tracklets2) != 0:
+
+        cm = CostMatrix(filtered_tracklets1,filtered_tracklets2)
         dismat, q_track_ids, q_cam_ids, g_track_ids, g_cam_ids, q_times, g_times, q_statuses, g_statuses = cm.cost_matrix(metric = 'Cosine_Distance')
         print(dismat)
 
@@ -98,7 +45,83 @@ def tracklet_match(tracklets1:SaeMessage,tracklets2:SaeMessage):
         reid_dict = {}
         if dismat.size > 0:
             reid_dict,rm_dict = calc_reid(dismat,q_track_ids,q_cam_ids, g_track_ids, g_cam_ids, q_times, q_statuses, g_statuses, g_times)
-        print(reid_dict)
+
+        if reid_dict != {}:
+            print(reid_dict)
+            with open("reid_dict.txt", "w") as txt_file:
+                txt_file.write(str(reid_dict))
+    
+    return reid_dict
+                            
+
+            
+
+
+
+def tracklet_filter(logger, img, tracklets: Dict[str, Tracklet]):
+    """
+    Filters tracklets based on their duration and movement criteria.
+
+    Args:
+        img: The input image used to calculate movement in pixels (for height reference).
+        tracklets: A dictionary of Tracklet objects keyed by their IDs.
+
+    Returns:
+        A filtered dictionary of tracklets meeting the duration and movement criteria.
+    """
+    filtered_tracklets = {}
+
+    for track_id, tracklet in tracklets.items():
+        # Calculate the duration of the tracklet
+        time_duration_ms = tracklet.end_time - tracklet.start_time
+
+        # Filter out tracklets with a duration less than 0.5 seconds (500 ms)
+        if time_duration_ms < 500:
+            logger.debug('time_duration_ms < 500')
+            logger.debug(time_duration_ms)
+            # print(f'tracklet end time {tracklet.end_time}')
+            # print(f'tracklet start time {tracklet.start_time}')
+            continue
+
+        # Ensure there are enough detections to calculate movement
+        if len(tracklet.detections_info) < 2:
+            logger.debug('detection info not complete')
+            continue
+
+        # Get bounding box details of the first detection
+        start_bbox = tracklet.detections_info[0].bounding_box
+        start_central = [
+            (start_bbox.min_x + start_bbox.max_x) / 2 ,
+            (start_bbox.min_y + start_bbox.max_y) / 2 ,
+        ]
+
+        # Get bounding box details of the last detection
+        last_bbox = tracklet.detections_info[-1].bounding_box
+        last_central = [
+            (last_bbox.min_x + last_bbox.max_x) / 2 ,
+            (last_bbox.min_y + last_bbox.max_y) / 2 ,
+        ]
+
+        # Calculate the Euclidean distance of movement
+        distance = np.sqrt(
+            (last_central[0] - start_central[0]) ** 2 +
+            (last_central[1] - start_central[1]) ** 2
+        )
+
+        # Filter out tracklets that move less than 1/5th of the image height
+        if distance < (1 / 8):
+            logger.debug('car is stastic')
+            tracklet.age += 1
+            # print(f'start_central: {start_central}')
+            # print(f'last_central: {last_central}')
+            logger.debug(distance)
+            continue
+
+        # If the tracklet meets all criteria, add it to the filtered dictionary
+        filtered_tracklets[track_id] = tracklet
+
+    
+    return filtered_tracklets
 
 
 
