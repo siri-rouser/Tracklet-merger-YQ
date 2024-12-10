@@ -24,6 +24,8 @@ class Trackletdatabase:
         num_exist_tracklet = 0
         if stream_id not in self.data.cameras:
             self.data.cameras[stream_id].CopyFrom(TrackletsByCamera())
+        if stream_id not in self.remove_dict:
+            self.remove_dict[stream_id] = []
 
         for idx, track_id in enumerate(sae_msg.trajectory.cameras[stream_id].tracklets):
             current_tracklet = sae_msg.trajectory.cameras[stream_id].tracklets[track_id]
@@ -58,8 +60,6 @@ class Trackletdatabase:
                     for detection_info in current_tracklet.detections_info:
                         detection = self.data.cameras[stream_id].tracklets[track_id].detections_info.add()
                         detection.CopyFrom(detection_info)
-
-                    self.data.cameras[stream_id].tracklets[track_id].age = int(current_tracklet.age)
 
                     # print(f"Updated end_time for tracklet {track_id} to {self.data.trajectory.cameras[stream_id].tracklets[track_id].end_time}")
                     self.data.cameras[stream_id].tracklets[track_id].status = 'Active'
@@ -102,5 +102,11 @@ class Trackletdatabase:
             del self.data.cameras[stream_id].tracklets[track_id]
             self.logger.info(f"Pruned tracklet {track_id} from stream_id {stream_id}")
 
-    def matching_result_process(self,stream_id,reid_dict):
-        pass
+    def matching_result_process(self,stream_id,reid_dict,sae_msg:SaeMessage):
+        for cam_id in reid_dict:
+            if cam_id =='c001':
+                for track_id in reid_dict[track_id]:
+                    sae_msg
+                    self.remove_dict['stream1'].append(track_id)
+
+                    sae_msg

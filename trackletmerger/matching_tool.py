@@ -14,8 +14,8 @@ class CostMatrix:
         self.gallery_tracklet = tracklets2
 
     def cost_matrix(self,metric):
-        q_feats, q_track_ids, q_cam_ids, q_times, q_track_status = self._extract_tracklet_data(self.query_tracklet, cam_id = 'c001')
-        g_feats, g_track_ids, g_cam_ids, g_times, g_track_status = self._extract_tracklet_data(self.gallery_tracklet, cam_id = 'c002')
+        q_feats, q_track_ids, q_cam_ids, q_times, q_track_status, q_class_ids = self._extract_tracklet_data(self.query_tracklet, cam_id = 'c001')
+        g_feats, g_track_ids, g_cam_ids, g_times, g_track_status, g_class_ids = self._extract_tracklet_data(self.gallery_tracklet, cam_id = 'c002')
         
         if q_feats is None or g_feats is None or q_feats.size(0) == 0 or g_feats.size(0) == 0:
             distmat = []
@@ -29,8 +29,10 @@ class CostMatrix:
 
         q_times = np.asarray(q_times)
         g_times = np.asarray(g_times)
+        g_class_ids = np.array(g_class_ids)
+        q_class_ids = np.array(q_class_ids)
         # zone is a int variable
-        return distmat, q_track_ids, q_cam_ids, g_track_ids, g_cam_ids, q_times, g_times, q_track_status, g_track_status
+        return distmat, q_track_ids, q_cam_ids, g_track_ids, g_cam_ids, q_times, g_times, q_track_status, g_track_status, q_class_ids, g_class_ids 
     
     def _track_operation(self,tracklet_path):
         feats, track_ids, cam_ids, entry_zones, exit_zones = [], [], [], [], []
@@ -86,7 +88,7 @@ class CostMatrix:
     
 
     def _extract_tracklet_data(self, tracklets,cam_id):
-        feats, track_ids, cam_ids, track_status, times = [], [], [], [], []
+        feats, track_ids, cam_ids, track_status, times, class_ids = [], [], [], [], [], []
 
         with torch.no_grad():
             for track_id in tracklets.keys():
@@ -96,6 +98,7 @@ class CostMatrix:
                 cam_ids.append(cam_id)
                 times.append([tracklets[track_id].start_time, tracklets[track_id].end_time])
                 track_status.append(tracklets[track_id].status)
+                class_ids.append(tracklets[track_id].detections_info[0].object_id)
 
             feats = torch.cat(feats, 0) if feats else torch.empty((0, 0))
             track_ids = np.asarray(track_ids)
@@ -103,10 +106,10 @@ class CostMatrix:
 
         print(f'Got features for set, obtained {feats.size(0)}-by-{feats.size(1)} matrix' if feats.size(0) > 0 else 'No features found.')
 
-        return feats, track_ids, cam_ids, times, track_status
+        return feats, track_ids, cam_ids, times, track_status, class_ids
 
 
-def type_remove_gen(q_status,g_statuses,order):
+def status_remove_gen(q_status,g_statuses,order):
     type_remove = []
     if q_status == 'Lost':
         for ord in order:
@@ -127,7 +130,7 @@ def type_remove_gen(q_status,g_statuses,order):
     return type_remove
 
 
-def calc_reid(dismat,q_track_ids,q_cam_ids, g_track_ids, g_cam_ids, q_times, q_statuses, g_statuses, g_times,dis_thre=0.7,dis_remove=0.8):
+def calc_reid(dismat,q_track_ids,q_cam_ids, g_track_ids, g_cam_ids, q_times, q_statuses, g_statuses, g_times,q_class_ids, g_class_ids, dis_thre=0.7,dis_remove=0.8):
     # dis_thre=0.47,dis_remove=0.57
     # For Euclidean Distance (0.29,0.34)
     # new_id = np.max(g_track_ids)
@@ -139,6 +142,7 @@ def calc_reid(dismat,q_track_ids,q_cam_ids, g_track_ids, g_cam_ids, q_times, q_s
     for index, q_track_id in enumerate(q_track_ids):
 
         q_cam_id = q_cam_ids[index]
+        q_class_id =q_class_ids[index]
         q_time = q_times[index]
         q_status = q_statuses[index]
         # q_entry_pair = []
@@ -151,13 +155,12 @@ def calc_reid(dismat,q_track_ids,q_cam_ids, g_track_ids, g_cam_ids, q_times, q_s
         # q_entry_pair.append(ZONE_PAIR[q_cam_id-41][g_cam_id-41] for g_cam_id in g_cam_ids[order])
         # q_exit_pair.append(ZONE_PAIR[g_cam_id-41][q_cam_id-41] for g_cam_id in g_cam_ids[order])
         # | is or True | False -> True
-        type_remove = type_remove_gen(q_status,g_statuses,order)
+        status_remove = status_remove_gen(q_status,g_statuses,order)
 
-        
-        remove = (g_track_ids[order] == q_track_id) | \
-                (g_cam_ids[order] == q_cam_id) | \
+        remove = (g_cam_ids[order] == q_cam_id) | \
+                (g_class_ids[order] != q_class_id)| \
                 (dismat[index][order] > dis_thre) | \
-                (type_remove)
+                (status_remove)
 
         # remove all track g_time < q_time + min_time and g_time > q_time + max_time
         keep = np.invert(remove)

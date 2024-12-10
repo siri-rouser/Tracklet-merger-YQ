@@ -36,7 +36,7 @@ def tracklet_match(logger,image,tracklets1:SaeMessage,tracklets2:SaeMessage):
     if len(filtered_tracklets1) != 0 and len(filtered_tracklets2) != 0:
 
         cm = CostMatrix(filtered_tracklets1,filtered_tracklets2)
-        dismat, q_track_ids, q_cam_ids, g_track_ids, g_cam_ids, q_times, g_times, q_statuses, g_statuses = cm.cost_matrix(metric = 'Cosine_Distance')
+        dismat, q_track_ids, q_cam_ids, g_track_ids, g_cam_ids, q_times, g_times, q_statuses, g_statuses, q_class_ids, g_class_ids = cm.cost_matrix(metric = 'Cosine_Distance')
         print(dismat)
 
         # NOTE: inspect values, the dismat look not good?
@@ -44,17 +44,14 @@ def tracklet_match(logger,image,tracklets1:SaeMessage,tracklets2:SaeMessage):
         # change the data source to get better results
         reid_dict = {}
         if dismat.size > 0:
-            reid_dict,rm_dict = calc_reid(dismat,q_track_ids,q_cam_ids, g_track_ids, g_cam_ids, q_times, q_statuses, g_statuses, g_times)
+            reid_dict,rm_dict = calc_reid(dismat,q_track_ids,q_cam_ids, g_track_ids, g_cam_ids, q_times, q_statuses, g_statuses, g_times, q_class_ids, g_class_ids)
 
         if reid_dict != {}:
             print(reid_dict)
             with open("reid_dict.txt", "w") as txt_file:
                 txt_file.write(str(reid_dict))
     
-    return reid_dict
-                            
-
-            
+        return reid_dict
 
 
 
