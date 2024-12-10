@@ -25,9 +25,10 @@ PROTO_DESERIALIZATION_DURATION = Summary('my_stage_proto_deserialization_duratio
 class TrackletMerger:
     def __init__(self, config: MergingConfig, log_level: LogLevel) -> None:
         self._config = config
-        self._buffer = MessageBuffer()
-        self._trackletdatabase = Trackletdatabase()
+        # self._buffer = MessageBuffer()
+
         logger.setLevel(log_level.value)
+        self._trackletdatabase = Trackletdatabase(logger)
 
     def __call__(self, input_proto) -> Any:
         return self.get(input_proto)
@@ -37,16 +38,25 @@ class TrackletMerger:
         sae_msg = None
         if input_proto is not None:
             frame_image,sae_msg = self._unpack_proto(input_proto)
+
+        else:
+            return [(self._config.output_stream_id, b'')]
+        
+        logger.debug(f"[DEBUG] Unpacking SAE message, timestamp: {sae_msg.frame.timestamp_utc_ms}")
+
         self._trackletdatabase.append(frame_image,stream_id,sae_msg)
+        self._trackletdatabase.tracklet_status_update(stream_id,sae_msg)
 
         # tracklet_match(sae_msg)
         # NOTE: change a data source to test again
-        print(len(self._trackletdatabase.data.trajectory.cameras[stream_id].tracklets))
-        if (self._trackletdatabase.data.trajectory.cameras['stream1'] is not None) and (self._trackletdatabase.data.trajectory.cameras['stream2'] is not None):
-            tracklets1 = self._trackletdatabase.data.trajectory.cameras['stream1'].tracklets
-            tracklets2 = self._trackletdatabase.data.trajectory.cameras['stream2'].tracklets
-            tracklet_match(tracklets1,tracklets2)
+        if (self._trackletdatabase.data.cameras['stream1'].tracklets is not None) and (self._trackletdatabase.data.cameras['stream2'].tracklets is not None):
+            tracklets1 = self._trackletdatabase.data.cameras['stream1'].tracklets
+            tracklets2 = self._trackletdatabase.data.cameras['stream2'].tracklets
+            reid_dict = tracklet_match(logger,frame_image,tracklets1,tracklets2)
 
+        self._trackletdatabase.matching_result_process(stream_id,reid_dict)
+        self._trackletdatabase.prune(stream_id)
+            
         # Your implementation goes (mostly) here
         logger.warning('Received SAE message from pipeline')
         out_msg = sae_msg

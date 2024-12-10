@@ -2,6 +2,7 @@ import pickle
 import numpy as np
 import torch
 import sys
+
 sys.path.append('../')
 from visionapi_yq.messages_pb2 import SaeMessage, TrackletsByCamera,Trajectory,Tracklet
 # from sklearn.neighbors import KernelDensity
@@ -107,25 +108,26 @@ class CostMatrix:
 
 def type_remove_gen(q_status,g_statuses,order):
     type_remove = []
-    if q_status == 'Active' or q_status == 'Lost':
+    if q_status == 'Lost':
         for ord in order:
             type_remove.append(True)
-    else:
+    elif q_status == 'Active':
         for ord in order:
-            if q_status == 'Inactive':
-                if g_statuses[ord] == 'Searching':
-                    type_remove.append(False)
-                else:
-                    type_remove.append(True)
+            if g_statuses[ord] == 'Searching':
+                type_remove.append(False)
+            else:
+                type_remove.append(True)
+    else: # if q_status is searching
+        for ord in order:
             if q_status == 'Searching':
-                if g_statuses[ord] == 'Inactive':
+                if g_statuses[ord] == 'Active':
                     type_remove.append(False)
                 else:
                     type_remove.append(True)
     return type_remove
 
 
-def calc_reid(dismat,q_track_ids,q_cam_ids, g_track_ids, g_cam_ids, q_times, q_statuses, g_statuses, g_times,dis_thre=0.7,dis_remove=0.7):
+def calc_reid(dismat,q_track_ids,q_cam_ids, g_track_ids, g_cam_ids, q_times, q_statuses, g_statuses, g_times,dis_thre=0.7,dis_remove=0.8):
     # dis_thre=0.47,dis_remove=0.57
     # For Euclidean Distance (0.29,0.34)
     # new_id = np.max(g_track_ids)
@@ -182,7 +184,7 @@ def calc_reid(dismat,q_track_ids,q_cam_ids, g_track_ids, g_cam_ids, q_times, q_s
                       (dismat[index][order]>dis_remove)
         # print(remove_hard)
         keep_hard = np.invert(remove_hard)
-        print(keep_hard)
+ 
         if True not in keep_hard: # nothing is been kept,所有的track都匹配不上
             # print('NO TRACK LEFT FOR PAIRING')
             if q_cam_id not in list(rm_dict.keys()):
