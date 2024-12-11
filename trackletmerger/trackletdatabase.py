@@ -8,6 +8,8 @@ class Trackletdatabase:
         self.data = Trajectory()
         self.logger = logger  
         self.remove_dict = {}
+        self.matched_dict = {}
+
     #NOTE:Current I am thinking about append the sae_message from each saeframe as the database, so in that case i donot need the buffer. will that works?
 
     def append(self,input_img, stream_id, sae_msg:SaeMessage):
@@ -102,11 +104,22 @@ class Trackletdatabase:
             del self.data.cameras[stream_id].tracklets[track_id]
             self.logger.info(f"Pruned tracklet {track_id} from stream_id {stream_id}")
 
-    def matching_result_process(self,stream_id,reid_dict,sae_msg:SaeMessage):
+    def matching_result_process(self,reid_dict):
+        '''To add the reid_dict result into self.matched_dict'''
         for cam_id in reid_dict:
-            if cam_id =='c001':
-                for track_id in reid_dict[track_id]:
-                    sae_msg
-                    self.remove_dict['stream1'].append(track_id)
-
-                    sae_msg
+            if cam_id == 'c001':
+                strem_key = 'stream1'
+            elif cam_id == 'c002':
+                stream_key = 'stream2'
+            else:
+                raise ValueError('Cam id not avilable')
+                
+            for track_id in reid_dict[cam_id]:
+                if stream_key not in self.matched_dict:
+                    self.matched_dict = {}
+                if track_id not in self.matched_dict[stream_key]:
+                    self.matched_dict[stream_key][track_id] = {}
+                
+                self.matched_dict[stream_key][track_id]['ori_track_id'] = track_id
+                self.matched_dict[stream_key][track_id]['dis'] = reid_dict[stream_key][track_id]['dis']
+                self.matched_dict[stream_key][track_id]['new_track_id'] = reid_dict[stream_key][track_id]['id']

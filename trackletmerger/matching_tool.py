@@ -101,7 +101,7 @@ class CostMatrix:
                 class_ids.append(tracklets[track_id].detections_info[0].object_id)
 
             feats = torch.cat(feats, 0) if feats else torch.empty((0, 0))
-            track_ids = np.asarray(track_ids)
+            track_ids = np.asarray(track_ids,dtype=np.int32)
             cam_ids = np.asarray(cam_ids)
 
         print(f'Got features for set, obtained {feats.size(0)}-by-{feats.size(1)} matrix' if feats.size(0) > 0 else 'No features found.')

@@ -1,4 +1,5 @@
 import logging
+import time
 from typing import Any, Dict, NamedTuple,Dict, List, Optional, Tuple
 
 from prometheus_client import Counter, Histogram, Summary
@@ -38,11 +39,13 @@ class TrackletMerger:
         sae_msg = None
         if input_proto is not None:
             frame_image,sae_msg = self._unpack_proto(input_proto)
-
+            print(sae_msg.frame.source_id)
         else:
-            return [(self._config.output_stream_id, b'')]
+            return b''
         
         logger.debug(f"[DEBUG] Unpacking SAE message, timestamp: {sae_msg.frame.timestamp_utc_ms}")
+
+        inference_start = time.monotonic_ns()
 
         self._trackletdatabase.append(frame_image,stream_id,sae_msg)
         self._trackletdatabase.tracklet_status_update(stream_id,sae_msg)
@@ -54,14 +57,14 @@ class TrackletMerger:
             tracklets2 = self._trackletdatabase.data.cameras['stream2'].tracklets
             reid_dict = tracklet_match(logger,frame_image,tracklets1,tracklets2)
 
-        # self._trackletdatabase.matching_result_process(stream_id,reid_dict,sae_msg)
+        self._trackletdatabase.matching_result_process(reid_dict,sae_msg)
         self._trackletdatabase.prune(stream_id)
             
         # Your implementation goes (mostly) here
         logger.warning('Received SAE message from pipeline')
-        out_msg = sae_msg
         # return [(self._config.output_stream_id, self._pack_proto(out_msg))]
-        return [(self._config.output_stream_id, self._pack_proto(out_msg))]
+        inference_time_us = (time.monotonic_ns() - inference_start) // 1000
+        return self._create_output(stream_id,inference_time_us,sae_msg)
         
     @PROTO_DESERIALIZATION_DURATION.time()
     def _unpack_proto(self, sae_message_bytes):
@@ -77,3 +80,25 @@ class TrackletMerger:
     def _pack_proto(self, sae_msg: SaeMessage):
         return sae_msg.SerializeToString()
     
+    @PROTO_SERIALIZATION_DURATION.time()
+    def _create_output(self, stream_id, inference_time_us, input_sae_msg:SaeMessage):
+        out_sae_msg = SaeMessage()
+        out_sae_msg.frame.CopyFrom(input_sae_msg.frame)
+        out_sae_msg.metrics.CopyFrom(input_sae_msg.metrics)
+        self._trackletdatabase.matched_dict
+
+        for detection in input_sae_msg.detections:
+            new_detection = out_sae_msg.detections.add()
+            if detection.object_id not in self._trackletdatabase.matched_dict[stream_id]:
+                new_detection.CopyFrom(detection)  # Copy data from the existing detection
+            else:
+                new_detection.bounding_box.CopyFrom(detection.bounding_box)
+                new_detection.confidence = detection.confidence
+                new_detection.class_id = detection.class_id
+                new_detection.geo_coordinate = detection.geo_coordinate
+                # Update the track_id in this step 
+                new_detection.object_id = self._trackletdatabase.matched_dict[stream_id][detection.object_id]['new_track_id']
+
+        out_sae_msg.metrics.merge_inference_time_us = inference_time_us
+
+        return out_sae_msg.SerializeToString()
