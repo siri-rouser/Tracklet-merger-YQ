@@ -34,31 +34,6 @@ class CostMatrix:
         # zone is a int variable
         return distmat, q_track_ids, q_cam_ids, g_track_ids, g_cam_ids, q_times, g_times, q_track_status, g_track_status, q_class_ids, g_class_ids 
     
-    def _track_operation(self,tracklet_path):
-        feats, track_ids, cam_ids, entry_zones, exit_zones = [], [], [], [], []
-        times = []
-        with open(tracklet_path,'rb') as f:
-            track_info = pickle.load(f)
-        
-        with torch.no_grad():
-            for track_id,value in track_info.items():
-                feat_tensor = torch.tensor(value['feat'], dtype=torch.float).unsqueeze(0)# torch.unsequezze(0) add one dimenson to let it be [1x1024] ratherthan [1024]
-                feats.append(feat_tensor)
-                track_ids.append(track_id)
-                cam_ids.append(int(value['cam'][-3:]))
-                times.append([value['start_time'],value['end_time']])
-                if 'entry_zone_cls' in list(value.keys()):
-                    entry_zones.append([value['entry_zone_cls'], value['entry_zone_id']])
-                    exit_zones.append([value['exit_zone_cls'], value['exit_zone_id']])
-
-            feats = torch.cat(feats,0)
-            track_ids = np.asarray(track_ids)
-            cam_ids = np.asarray(cam_ids)
-       
-        print('Got features for set, obtained {}-by-{} matrix'.format(feats.size(0), feats.size(1)))
-
-        return feats,track_ids,cam_ids,times,entry_zones,exit_zones
-    
     def euclidean_distance(self, q_feats, g_feats):
         m, n = q_feats.size(0), g_feats.size(0)
         distmat = torch.pow(q_feats, 2).sum(dim=1, keepdim=True).expand(m, n) + \
@@ -94,7 +69,7 @@ class CostMatrix:
             for track_id in tracklets.keys():
                 feat_tensor = torch.tensor(tracklets[track_id].mean_feature, dtype=torch.float).unsqueeze(0)
                 feats.append(feat_tensor)
-                track_ids.append(track_id)
+                track_ids.append(int(float(track_id)))
                 cam_ids.append(cam_id)
                 times.append([tracklets[track_id].start_time, tracklets[track_id].end_time])
                 track_status.append(tracklets[track_id].status)
