@@ -104,22 +104,24 @@ class Trackletdatabase:
             del self.data.cameras[stream_id].tracklets[track_id]
             self.logger.info(f"Pruned tracklet {track_id} from stream_id {stream_id}")
 
+    def matched_dict_initalize(self,stream_id):
+        self.matched_dict[stream_id] = {}
+
     def matching_result_process(self,reid_dict):
         '''To add the reid_dict result into self.matched_dict'''
         for cam_id in reid_dict:
             if cam_id == 'c001':
-                strem_key = 'stream1'
+                stream_key = 'stream1'
             elif cam_id == 'c002':
                 stream_key = 'stream2'
             else:
                 raise ValueError('Cam id not avilable')
                 
             for track_id in reid_dict[cam_id]:
-                if stream_key not in self.matched_dict:
-                    self.matched_dict = {}
                 if track_id not in self.matched_dict[stream_key]:
                     self.matched_dict[stream_key][track_id] = {}
                 
                 self.matched_dict[stream_key][track_id]['ori_track_id'] = track_id
-                self.matched_dict[stream_key][track_id]['dis'] = reid_dict[stream_key][track_id]['dis']
-                self.matched_dict[stream_key][track_id]['new_track_id'] = reid_dict[stream_key][track_id]['id']
+                self.matched_dict[stream_key][track_id]['dis'] = reid_dict[cam_id][track_id]['dis']
+                self.matched_dict[stream_key][track_id]['new_track_id'] = reid_dict[cam_id][track_id]['id']
+

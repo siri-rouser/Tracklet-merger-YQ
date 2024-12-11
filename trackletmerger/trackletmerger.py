@@ -57,7 +57,11 @@ class TrackletMerger:
             tracklets2 = self._trackletdatabase.data.cameras['stream2'].tracklets
             reid_dict = tracklet_match(logger,frame_image,tracklets1,tracklets2)
 
-        self._trackletdatabase.matching_result_process(reid_dict,sae_msg)
+        if reid_dict is None:
+            self._trackletdatabase.matched_dict_initalize(stream_id)
+        else:
+            self._trackletdatabase.matching_result_process(reid_dict)
+
         self._trackletdatabase.prune(stream_id)
             
         # Your implementation goes (mostly) here
@@ -85,7 +89,6 @@ class TrackletMerger:
         out_sae_msg = SaeMessage()
         out_sae_msg.frame.CopyFrom(input_sae_msg.frame)
         out_sae_msg.metrics.CopyFrom(input_sae_msg.metrics)
-        self._trackletdatabase.matched_dict
 
         for detection in input_sae_msg.detections:
             new_detection = out_sae_msg.detections.add()
@@ -95,7 +98,6 @@ class TrackletMerger:
                 new_detection.bounding_box.CopyFrom(detection.bounding_box)
                 new_detection.confidence = detection.confidence
                 new_detection.class_id = detection.class_id
-                new_detection.geo_coordinate = detection.geo_coordinate
                 # Update the track_id in this step 
                 new_detection.object_id = self._trackletdatabase.matched_dict[stream_id][detection.object_id]['new_track_id']
 
