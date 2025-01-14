@@ -58,7 +58,6 @@ def run_stage():
 
             if proto_data is not None:
                 FRAME_COUNTER.inc()
-            print(stream_key)
 
             if stream_key is not None:
                stream_id = stream_key.split(':')[1]
