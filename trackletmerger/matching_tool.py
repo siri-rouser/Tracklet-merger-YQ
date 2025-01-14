@@ -105,7 +105,7 @@ def status_remove_gen(q_status,g_statuses,order):
     return type_remove
 
 
-def calc_reid(dismat,q_track_ids,q_cam_ids, g_track_ids, g_cam_ids, q_times, q_statuses, g_statuses, g_times,q_class_ids, g_class_ids, dis_thre=0.7,dis_remove=0.8):
+def calc_reid(dismat,q_track_ids,q_cam_ids, g_track_ids, g_cam_ids, q_times, q_statuses, g_statuses, g_times,q_class_ids, g_class_ids, dis_thre,dis_remove):
     # dis_thre=0.47,dis_remove=0.57
     # For Euclidean Distance (0.29,0.34)
     # new_id = np.max(g_track_ids)
