@@ -83,6 +83,7 @@ class TrackletMerger:
         out_sae_msg = SaeMessage()
         out_sae_msg.frame.CopyFrom(input_sae_msg.frame)
         out_sae_msg.metrics.CopyFrom(input_sae_msg.metrics)
+        out_sae_msg.trajectory.CopyFrom(input_sae_msg.trajectory)
 
         for detection in input_sae_msg.detections:
             new_detection = out_sae_msg.detections.add()
