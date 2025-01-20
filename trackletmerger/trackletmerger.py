@@ -30,36 +30,30 @@ class TrackletMerger:
 
         logger.setLevel(log_level.value)
         self._trackletdatabase = Trackletdatabase(logger)
+        self._trackletdatabase.matched_dict_initalize(self._config)
 
     def __call__(self, input_proto) -> Any:
         return self.get(input_proto)
     
     @GET_DURATION.time()
-    def get(self, stream_id, input_proto:bytes = None) -> List[Tuple[str, bytes]] :
-        sae_msg = None
+    def get(self, stream_id:str, input_proto:bytes = None) -> bytes :
         if input_proto is not None:
             frame_image,sae_msg = self._unpack_proto(input_proto)
-            print(sae_msg.frame.source_id)
+            logger.debug(sae_msg.frame.source_id)
         else:
             return b''
-        
-        logger.debug(f"[DEBUG] Unpacking SAE message, timestamp: {sae_msg.frame.timestamp_utc_ms}")
 
         inference_start = time.monotonic_ns()
 
         self._trackletdatabase.append(frame_image,stream_id,sae_msg)
         self._trackletdatabase.tracklet_status_update(stream_id,sae_msg)
 
-        # tracklet_match(sae_msg)
-        # NOTE: change a data source to test again
         if (self._trackletdatabase.data.cameras['stream1'].tracklets is not None) and (self._trackletdatabase.data.cameras['stream2'].tracklets is not None):
             tracklets1 = self._trackletdatabase.data.cameras['stream1'].tracklets
             tracklets2 = self._trackletdatabase.data.cameras['stream2'].tracklets
-            reid_dict = tracklet_match(logger,frame_image,tracklets1,tracklets2)
+            reid_dict = tracklet_match(self._config,logger,frame_image,tracklets1,tracklets2)
 
-        if reid_dict is None:
-            self._trackletdatabase.matched_dict_initalize(stream_id)
-        else:
+        if reid_dict is not None:
             self._trackletdatabase.matching_result_process(reid_dict)
 
         self._trackletdatabase.prune(stream_id)
@@ -89,6 +83,7 @@ class TrackletMerger:
         out_sae_msg = SaeMessage()
         out_sae_msg.frame.CopyFrom(input_sae_msg.frame)
         out_sae_msg.metrics.CopyFrom(input_sae_msg.metrics)
+        out_sae_msg.trajectory.CopyFrom(input_sae_msg.trajectory)
 
         for detection in input_sae_msg.detections:
             new_detection = out_sae_msg.detections.add()
