@@ -4,21 +4,18 @@ from visionapi_yq.messages_pb2 import SaeMessage,TrackletsByCamera,Tracklet,Traj
 from visionlib.pipeline.tools import get_raw_frame_data
 
 class Trackletdatabase:
+    '''Keeps Trajectory() messages'''
     def __init__(self,logger):
         self.data = Trajectory()
         self.logger = logger  
         self.remove_dict = {}
         self.matched_dict = {}
 
-    #NOTE:Current I am thinking about append the sae_message from each saeframe as the database, so in that case i donot need the buffer. will that works?
-
     def append(self,input_img, stream_id, sae_msg:SaeMessage):
+        '''Update the tracklet database based on sae_msg'''
 
         if not sae_msg or not sae_msg.trajectory:
             raise ValueError("Invalid sae_msg: Missing trajectory")      
-  
-
-        # print(f"[DEBUG] Unpacked SAE message timestamp: {sae_msg.frame.timestamp_utc_ms}")
 
         height = input_img.shape[0]
         width = input_img.shape[1]
@@ -43,8 +40,8 @@ class Trackletdatabase:
                     previous_feature = np.array(self.data.cameras[stream_id].tracklets[track_id].mean_feature)
                     out_feature = np.array(current_tracklet.mean_feature) # current tracklet should only contain the feature in current timestamp 
                     # Debug prints to check timestamps
-                    self.logger.debug(f"[DEBUG] Tracklet {track_id} - Database start_time: {self.data.cameras[stream_id].tracklets[track_id].start_time}")
-                    self.logger.debug(f"[DEBUG] Tracklet {track_id} - Database end_time: {self.data.cameras[stream_id].tracklets[track_id].end_time}, SAE timestamp: {sae_msg.frame.timestamp_utc_ms}")
+                    # self.logger.debug(f"[DEBUG] Tracklet {track_id} - Database start_time: {self.data.cameras[stream_id].tracklets[track_id].start_time}")
+                    # self.logger.debug(f"[DEBUG] Tracklet {track_id} - Database end_time: {self.data.cameras[stream_id].tracklets[track_id].end_time}, SAE timestamp: {sae_msg.frame.timestamp_utc_ms}")
 
                     number_det = len(self.data.cameras[stream_id].tracklets[track_id].detections_info)
 
@@ -63,13 +60,9 @@ class Trackletdatabase:
                         detection = self.data.cameras[stream_id].tracklets[track_id].detections_info.add()
                         detection.CopyFrom(detection_info)
 
-                    # print(f"Updated end_time for tracklet {track_id} to {self.data.trajectory.cameras[stream_id].tracklets[track_id].end_time}")
                     self.data.cameras[stream_id].tracklets[track_id].status = 'Active'
-                    self.logger.debug(f'tracklet status: {self.data.cameras[stream_id].tracklets[track_id].status}')
                     num_exist_tracklet+=1
-
-        # print(f'The sae_ms tracklet end time:{sae_msg.frame.timestamp_utc_ms}')
-        # print(f'num of new tracklet {num_new_tracklet}, num of exist tracklet {num_exist_tracklet}')
+        self.logger.debug(f'num of new tracklet {num_new_tracklet}, num of exist tracklet {num_exist_tracklet}')
 
     def tracklet_status_update(self,stream_id,sae_msg:SaeMessage):
         for idx, track_id in enumerate(self.data.cameras[stream_id].tracklets):
@@ -104,8 +97,9 @@ class Trackletdatabase:
             del self.data.cameras[stream_id].tracklets[track_id]
             self.logger.info(f"Pruned tracklet {track_id} from stream_id {stream_id}")
 
-    def matched_dict_initalize(self,stream_id):
-        self.matched_dict[stream_id] = {}
+    def matched_dict_initalize(self,config):
+        for stream_id in config.input_stream_ids:
+            self.matched_dict[stream_id] = {}
 
     def matching_result_process(self,reid_dict):
         '''To add the reid_dict result into self.matched_dict'''
@@ -124,4 +118,3 @@ class Trackletdatabase:
                 self.matched_dict[stream_key][track_id]['ori_track_id'] = track_id
                 self.matched_dict[stream_key][track_id]['dis'] = reid_dict[cam_id][track_id]['dis']
                 self.matched_dict[stream_key][track_id]['new_track_id'] = reid_dict[cam_id][track_id]['id']
-

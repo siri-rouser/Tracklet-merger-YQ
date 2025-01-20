@@ -1,4 +1,5 @@
 import numpy as np
+from numba import njit
 import logging
 from typing import Dict
 from visionlib.pipeline.tools import get_raw_frame_data
@@ -22,10 +23,7 @@ def tracklet_status_update(stream_id,sae_msg: SaeMessage):
     return sae_msg
 
 
-def tracklet_match(logger,image,tracklets1:SaeMessage,tracklets2:SaeMessage):
-
-    logger.info(f"Number of tracklets in stream1:{len(tracklets1)}")
-    logger.info(f"Number of tracklets in stream2:{len(tracklets2)}")
+def tracklet_match(config, logger,image,tracklets1:SaeMessage,tracklets2:SaeMessage):
 
     filtered_tracklets1 = tracklet_filter(logger,image, tracklets1)
     filtered_tracklets2 = tracklet_filter(logger, image, tracklets2)
@@ -36,15 +34,12 @@ def tracklet_match(logger,image,tracklets1:SaeMessage,tracklets2:SaeMessage):
     if len(filtered_tracklets1) != 0 and len(filtered_tracklets2) != 0:
 
         cm = CostMatrix(filtered_tracklets1,filtered_tracklets2)
-        dismat, q_track_ids, q_cam_ids, g_track_ids, g_cam_ids, q_times, g_times, q_statuses, g_statuses, q_class_ids, g_class_ids = cm.cost_matrix(metric = 'Cosine_Distance')
+        dismat, q_track_ids, q_cam_ids, g_track_ids, g_cam_ids, q_times, g_times, q_statuses, g_statuses, q_class_ids, g_class_ids = cm.cost_matrix(metric = config.matching_metric)
         print(dismat)
 
-        # NOTE: inspect values, the dismat look not good?
-        # Should we only search for tracklets in searching and trackleyts in active? 
-        # change the data source to get better results
         reid_dict = {}
         if dismat.size > 0:
-            reid_dict,rm_dict = calc_reid(dismat,q_track_ids,q_cam_ids, g_track_ids, g_cam_ids, q_times, q_statuses, g_statuses, g_times, q_class_ids, g_class_ids)
+            reid_dict,rm_dict = calc_reid(dismat,q_track_ids,q_cam_ids, g_track_ids, g_cam_ids, q_times, q_statuses, g_statuses, g_times, q_class_ids, g_class_ids,dis_thre=config.dis_thre,dis_remove=config.dis_remove)
 
         if reid_dict != {}:
             print(reid_dict)
@@ -53,6 +48,23 @@ def tracklet_match(logger,image,tracklets1:SaeMessage,tracklets2:SaeMessage):
     
         return reid_dict
 
+
+
+@njit
+def calculate_distance(start_bbox, last_bbox):
+    # Compute the central points of the bounding boxes
+    start_central_x = (start_bbox[0] + start_bbox[2]) / 2
+    start_central_y = (start_bbox[1] + start_bbox[3]) / 2
+
+    last_central_x = (last_bbox[0] + last_bbox[2]) / 2
+    last_central_y = (last_bbox[1] + last_bbox[3]) / 2
+
+    # Calculate the Euclidean distance
+    distance = np.sqrt(
+        (last_central_x - start_central_x) ** 2 +
+        (last_central_y - start_central_y) ** 2
+    )
+    return distance
 
 
 def tracklet_filter(logger, img, tracklets: Dict[str, Tracklet]):
@@ -76,8 +88,6 @@ def tracklet_filter(logger, img, tracklets: Dict[str, Tracklet]):
         if time_duration_ms < 500:
             logger.debug('time_duration_ms < 500')
             logger.debug(time_duration_ms)
-            # print(f'tracklet end time {tracklet.end_time}')
-            # print(f'tracklet start time {tracklet.start_time}')
             continue
 
         # Ensure there are enough detections to calculate movement
@@ -85,32 +95,27 @@ def tracklet_filter(logger, img, tracklets: Dict[str, Tracklet]):
             logger.debug('detection info not complete')
             continue
 
-        # Get bounding box details of the first detection
-        start_bbox = tracklet.detections_info[0].bounding_box
-        start_central = [
-            (start_bbox.min_x + start_bbox.max_x) / 2 ,
-            (start_bbox.min_y + start_bbox.max_y) / 2 ,
-        ]
+        # Extract bounding box details
+        start_bbox = np.array([
+            tracklet.detections_info[0].bounding_box.min_x,
+            tracklet.detections_info[0].bounding_box.min_y,
+            tracklet.detections_info[0].bounding_box.max_x,
+            tracklet.detections_info[0].bounding_box.max_y,
+        ])
+        last_bbox = np.array([
+            tracklet.detections_info[-1].bounding_box.min_x,
+            tracklet.detections_info[-1].bounding_box.min_y,
+            tracklet.detections_info[-1].bounding_box.max_x,
+            tracklet.detections_info[-1].bounding_box.max_y,
+        ])
 
-        # Get bounding box details of the last detection
-        last_bbox = tracklet.detections_info[-1].bounding_box
-        last_central = [
-            (last_bbox.min_x + last_bbox.max_x) / 2 ,
-            (last_bbox.min_y + last_bbox.max_y) / 2 ,
-        ]
-
-        # Calculate the Euclidean distance of movement
-        distance = np.sqrt(
-            (last_central[0] - start_central[0]) ** 2 +
-            (last_central[1] - start_central[1]) ** 2
-        )
-
+        # Use the Numba-accelerated function
+        distance = calculate_distance(start_bbox, last_bbox)
+        
         # Filter out tracklets that move less than 1/5th of the image height
         if distance < (1 / 8):
             logger.debug('car is stastic')
             tracklet.age += 1
-            # print(f'start_central: {start_central}')
-            # print(f'last_central: {last_central}')
             logger.debug(distance)
             continue
 

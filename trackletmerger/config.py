@@ -16,6 +16,9 @@ class RedisConfig(BaseModel):
 class MergingConfig(BaseModel):
     input_stream_ids: conlist(str)
     output_stream_id: str
+    matching_metric: str
+    dis_thre: float
+    dis_remove: float
 
 class TrackletMergerConfig(BaseSettings):
     log_level: LogLevel = LogLevel.WARNING
