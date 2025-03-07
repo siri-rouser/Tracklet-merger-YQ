@@ -58,10 +58,8 @@ class TrackletMerger:
 
         self._trackletdatabase.prune(stream_id)
             
-        # Your implementation goes (mostly) here
-        logger.warning('Received SAE message from pipeline')
-        # return [(self._config.output_stream_id, self._pack_proto(out_msg))]
         inference_time_us = (time.monotonic_ns() - inference_start) // 1000
+
         return self._create_output(stream_id,inference_time_us,sae_msg)
         
     @PROTO_DESERIALIZATION_DURATION.time()
@@ -83,7 +81,6 @@ class TrackletMerger:
         out_sae_msg = SaeMessage()
         out_sae_msg.frame.CopyFrom(input_sae_msg.frame)
         out_sae_msg.metrics.CopyFrom(input_sae_msg.metrics)
-        out_sae_msg.trajectory.CopyFrom(input_sae_msg.trajectory)
 
         for detection in input_sae_msg.detections:
             new_detection = out_sae_msg.detections.add()
@@ -93,6 +90,8 @@ class TrackletMerger:
                 new_detection.bounding_box.CopyFrom(detection.bounding_box)
                 new_detection.confidence = detection.confidence
                 new_detection.class_id = detection.class_id
+                new_detection.geo_coordinate.latitude = detection.geo_coordinate.latitude
+                new_detection.geo_coordinate.longitude = detection.geo_coordinate.longitude
                 # Update the track_id in this step 
                 new_detection.object_id = self._trackletdatabase.matched_dict[stream_id][detection.object_id]['new_track_id']
 
