@@ -4,7 +4,6 @@ version = "0.1.0"
 description = ""
 authors = ["flonix8 <flstanek@googlemail.com>"]
 license = "AGPLv3"
-readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.10"
@@ -15,6 +14,7 @@ redis = "^5.0.0"
 pydantic-settings = "^2.0.3"
 prometheus-client = "^0.17.1"
 numba = "^0.57.0"
+torch = "^2.2.2"
 
 
 [build-system]
