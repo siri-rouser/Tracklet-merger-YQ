@@ -39,10 +39,6 @@ class Trackletdatabase:
                     self.data.cameras[stream_id].tracklets[track_id].end_time = sae_msg.frame.timestamp_utc_ms
                     previous_feature = np.array(self.data.cameras[stream_id].tracklets[track_id].mean_feature)
                     out_feature = np.array(current_tracklet.mean_feature) # current tracklet should only contain the feature in current timestamp 
-                    # Debug prints to check timestamps
-                    # self.logger.debug(f"[DEBUG] Tracklet {track_id} - Database start_time: {self.data.cameras[stream_id].tracklets[track_id].start_time}")
-                    # self.logger.debug(f"[DEBUG] Tracklet {track_id} - Database end_time: {self.data.cameras[stream_id].tracklets[track_id].end_time}, SAE timestamp: {sae_msg.frame.timestamp_utc_ms}")
-
                     number_det = len(self.data.cameras[stream_id].tracklets[track_id].detections_info)
 
                     if number_det == 0:
@@ -67,9 +63,9 @@ class Trackletdatabase:
     def tracklet_status_update(self,stream_id,sae_msg:SaeMessage):
         for idx, track_id in enumerate(self.data.cameras[stream_id].tracklets):
             gap_time = max(sae_msg.frame.timestamp_utc_ms - self.data.cameras[stream_id].tracklets[track_id].end_time,0)
-            if gap_time > 1000:
+            if gap_time > 500:
                 self.data.cameras[stream_id].tracklets[track_id].status = 'Searching'
-            if gap_time > 30000:
+            if gap_time > 10000:
                 self.data.cameras[stream_id].tracklets[track_id].status = 'Lost'
 
     def prune(self,stream_id):
