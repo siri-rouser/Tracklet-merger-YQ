@@ -5,7 +5,7 @@ import sys
 import os
 
 # Correct import statement
-from visionapi_YQ.messages_pb2 import SaeMessage
+from visionapi_yq.messages_pb2 import SaeMessage
 
 
 # from sklearn.neighbors import KernelDensity

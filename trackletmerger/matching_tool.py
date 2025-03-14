@@ -1,6 +1,7 @@
 import pickle
 import numpy as np
 import torch
+from sklearn.neighbors import KernelDensity
 import sys
 
 sys.path.append('../')
@@ -104,33 +105,44 @@ def status_remove_gen(q_status,g_statuses,order):
                     type_remove.append(True)
     return type_remove
 
+def kde_filter(dismat,index,orders,kde,q_time,g_times,dis_alpha,dis_beta):
+    # q_time [enrty_time, exit_time]
+    for order in orders:
+        trans_time = q_time[0] - g_times[order][1] # entry_time - exit_time
+        pdf = np.exp(kde.score_samples(np.array(trans_time).reshape(-1,1))) # calculate the transition probability
+        if pdf < 2*1e-3: #0.002, in this kde, if trans_time > 6 second, the pdf will be less than 0.002
+            dismat[index][order]= dismat[index][order] + 1 # If the distance > 1 it will be automatically filtered later then
+        else:
+            dismat[index][order] = dis_alpha*dismat[index][order] + -1* dis_beta * pdf # decrease around 0.001 to 0.01 distance if it is matched...
 
-def calc_reid(dismat,q_track_ids,q_cam_ids, g_track_ids, g_cam_ids, q_times, q_statuses, g_statuses, g_times,q_class_ids, g_class_ids, dis_thre,dis_remove):
-    # dis_thre=0.47,dis_remove=0.57
-    # For Euclidean Distance (0.29,0.34)
-    # new_id = np.max(g_track_ids)
+    return dismat
+
+
+def calc_reid(dismat,q_track_ids,q_cam_ids, g_track_ids, g_cam_ids, q_times, q_statuses, g_statuses, g_times,q_class_ids, g_class_ids, dis_thre,dis_remove,dis_alpha,dis_beta):
+
     rm_dict = {}
     reid_dict = {}
     indices = np.argsort(dismat, axis=1) 
-    # print(indices)
-    # num_q, num_g = dismat.shape    
+
+    # initialize the kernel density estimation (data is made by myself at the moment, should be replaced by the real data later)
+    data = np.array([1, 0.9, 1.1, 1, 1]).reshape(-1, 1)
+    kde = KernelDensity(kernel='gaussian', bandwidth=1.5).fit(data)
+
     for index, q_track_id in enumerate(q_track_ids):
 
         q_cam_id = q_cam_ids[index]
         q_class_id =q_class_ids[index]
         q_time = q_times[index]
         q_status = q_statuses[index]
-        # q_entry_pair = []
-        # q_exit_pair = []
-        # g_times = np.array([time[0] for time in g_times])
-        
-        # check is that workable or not 
+
         order = indices[index] # the real order for the first query 
 
         # q_entry_pair.append(ZONE_PAIR[q_cam_id-41][g_cam_id-41] for g_cam_id in g_cam_ids[order])
         # q_exit_pair.append(ZONE_PAIR[g_cam_id-41][q_cam_id-41] for g_cam_id in g_cam_ids[order])
         # | is or True | False -> True
         status_remove = status_remove_gen(q_status,g_statuses,order)
+
+        dismat = kde_filter(dismat,index,order,kde,q_time,g_times,dis_alpha,dis_beta)
 
         remove = (g_cam_ids[order] == q_cam_id) | \
                 (g_class_ids[order] != q_class_id)| \

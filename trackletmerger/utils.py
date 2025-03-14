@@ -39,7 +39,7 @@ def tracklet_match(config, logger,image,tracklets1:SaeMessage,tracklets2:SaeMess
 
         reid_dict = {}
         if dismat.size > 0:
-            reid_dict,rm_dict = calc_reid(dismat,q_track_ids,q_cam_ids, g_track_ids, g_cam_ids, q_times, q_statuses, g_statuses, g_times, q_class_ids, g_class_ids,dis_thre=config.dis_thre,dis_remove=config.dis_remove)
+            reid_dict,rm_dict = calc_reid(dismat,q_track_ids,q_cam_ids, g_track_ids, g_cam_ids, q_times, q_statuses, g_statuses, g_times, q_class_ids, g_class_ids,dis_thre=config.dis_thre,dis_remove=config.dis_remove,dis_alpha=config.dis_alpha,dis_beta=config.dis_beta)
 
         if reid_dict != {}:
             print(reid_dict)
@@ -83,6 +83,7 @@ def tracklet_filter(logger, img, tracklets: Dict[str, Tracklet]):
     for track_id, tracklet in tracklets.items():
         # Calculate the duration of the tracklet
         time_duration_ms = tracklet.end_time - tracklet.start_time
+
 
         # Filter out tracklets with a duration less than 0.5 seconds (500 ms)
         if time_duration_ms < 500:

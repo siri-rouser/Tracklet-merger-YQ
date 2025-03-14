@@ -19,6 +19,8 @@ class MergingConfig(BaseModel):
     matching_metric: str
     dis_thre: float
     dis_remove: float
+    dis_alpha: float
+    dis_beta: float
 
 class TrackletMergerConfig(BaseSettings):
     log_level: LogLevel = LogLevel.WARNING
