@@ -98,3 +98,6 @@ class TrackletMerger:
         out_sae_msg.metrics.merge_inference_time_us = inference_time_us
 
         return out_sae_msg.SerializeToString()
+    
+    def result(self):
+        return self._trackletdatabase.matched_dict
