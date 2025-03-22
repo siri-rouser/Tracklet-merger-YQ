@@ -10,12 +10,18 @@ from visionlib.pipeline.publisher import RedisPublisher
 
 from .config import TrackletMergerConfig
 from .trackletmerger import TrackletMerger
+import atexit
 
 logger = logging.getLogger(__name__)
 
 REDIS_PUBLISH_DURATION = Histogram('my_stage_redis_publish_duration', 'The time it takes to push a message onto the Redis stream',
                                    buckets=(0.0025, 0.005, 0.0075, 0.01, 0.025, 0.05, 0.075, 0.1, 0.15, 0.2, 0.25))
 FRAME_COUNTER = Counter('my_stage_frame_counter', 'How many frames have been consumed from the Redis input stream')
+
+def save_results(merged_results):
+    with open("merged_results.txt", "w") as f:
+        for line in merged_results:
+            f.write(line + "\n")
 
 def run_stage():
 
@@ -66,4 +72,6 @@ def run_stage():
 
             with REDIS_PUBLISH_DURATION.time():
                 publish(f'{CONFIG.redis.output_stream_prefix}:{stream_id}', output_proto_data)
-            
+
+        # Once the loop is done, write the results to a text file:
+        atexit.register(save_results(trackletmerger.results))
