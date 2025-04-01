@@ -5,10 +5,9 @@ from typing import Any, Dict, NamedTuple,Dict, List, Optional, Tuple
 from prometheus_client import Counter, Histogram, Summary
 import sys
 sys.path.append('../')
-from visionapi_yq.messages_pb2 import BoundingBox, SaeMessage
+from visionapi_yq.messages_pb2 import SaeMessage
 from visionlib.pipeline.tools import get_raw_frame_data
 
-from .buffer import MessageBuffer
 from .config import MergingConfig, LogLevel
 from .utils import tracklet_match
 from .trackletdatabase import Trackletdatabase
@@ -26,11 +25,9 @@ PROTO_DESERIALIZATION_DURATION = Summary('my_stage_proto_deserialization_duratio
 class TrackletMerger:
     def __init__(self, config: MergingConfig, log_level: LogLevel) -> None:
         self._config = config
-        # self._buffer = MessageBuffer()
-
         logger.setLevel(log_level.value)
-        self._trackletdatabase = Trackletdatabase(logger)
-        self._trackletdatabase.matched_dict_initalize(self._config)
+        self._trackletdatabase = Trackletdatabase(logger,config)
+        self.image_size = (2560,1440)
 
     def __call__(self, input_proto) -> Any:
         return self.get(input_proto)
@@ -39,9 +36,11 @@ class TrackletMerger:
     def get(self, stream_id:str, input_proto:bytes = None) -> bytes :
         if input_proto is not None:
             frame_image,sae_msg = self._unpack_proto(input_proto)
-            logger.debug(sae_msg.frame.source_id)
         else:
             return b''
+        
+        if self.image_size is None:
+            self.image_size = (sae_msg.frame.shape.width, sae_msg.frame.shape.height)
 
         inference_start = time.monotonic_ns()
 
@@ -52,9 +51,10 @@ class TrackletMerger:
             tracklets1 = self._trackletdatabase.data.cameras['stream1'].tracklets
             tracklets2 = self._trackletdatabase.data.cameras['stream2'].tracklets
             reid_dict = tracklet_match(self._config,logger,frame_image,tracklets1,tracklets2)
+            print(reid_dict)
 
         if reid_dict is not None:
-            self._trackletdatabase.matching_result_process(reid_dict)
+            self._trackletdatabase.matching_result_process(reid_dict,sae_msg)
 
         self._trackletdatabase.prune(stream_id)
             
@@ -99,5 +99,5 @@ class TrackletMerger:
 
         return out_sae_msg.SerializeToString()
     
-    def result(self):
-        return self._trackletdatabase.matched_dict
+    def get_results(self):
+        return self._trackletdatabase.matched_dict, self.image_size, self._trackletdatabase.mini_time

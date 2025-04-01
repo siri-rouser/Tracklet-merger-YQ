@@ -108,9 +108,13 @@ def status_remove_gen(q_status,g_statuses,order):
 def kde_filter(dismat,index,orders,kde,q_time,g_times,dis_alpha,dis_beta):
     # q_time [enrty_time, exit_time]
     for order in orders:
-        trans_time = q_time[0] - g_times[order][1] # entry_time - exit_time
+        if (q_time[0] - g_times[order][1]) > 0: 
+            trans_time = (q_time[0] - g_times[order][1])/1000 # entry_time - exit_time
+        else:
+            trans_time = (g_times[order][0] - q_time[1])/1000 # start_time  - exit_time
         pdf = np.exp(kde.score_samples(np.array(trans_time).reshape(-1,1))) # calculate the transition probability
-        if pdf < 2*1e-3: #0.002, in this kde, if trans_time > 6 second, the pdf will be less than 0.002
+
+        if pdf < 2*1e-3: #0.002, in this kde, if trans_time > 4 second, the pdf will be less than 0.002
             dismat[index][order]= dismat[index][order] + 1 # If the distance > 1 it will be automatically filtered later then
         else:
             dismat[index][order] = dis_alpha*dismat[index][order] + -1* dis_beta * pdf # decrease around 0.001 to 0.01 distance if it is matched...
@@ -119,14 +123,13 @@ def kde_filter(dismat,index,orders,kde,q_time,g_times,dis_alpha,dis_beta):
 
 
 def calc_reid(dismat,q_track_ids,q_cam_ids, g_track_ids, g_cam_ids, q_times, q_statuses, g_statuses, g_times,q_class_ids, g_class_ids, dis_thre,dis_remove,dis_alpha,dis_beta):
-
     rm_dict = {}
     reid_dict = {}
     indices = np.argsort(dismat, axis=1) 
 
     # initialize the kernel density estimation (data is made by myself at the moment, should be replaced by the real data later)
-    data = np.array([1, 0.9, 1.1, 1, 1]).reshape(-1, 1)
-    kde = KernelDensity(kernel='gaussian', bandwidth=1.5).fit(data)
+    data = np.array([0.5,1, 0.9, 0.1, 0.5, 0.24,0.4,1.2,0.1]).reshape(-1, 1)
+    kde = KernelDensity(kernel='gaussian', bandwidth=1).fit(data)
 
     for index, q_track_id in enumerate(q_track_ids):
 

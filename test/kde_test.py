@@ -4,15 +4,15 @@ from sklearn.neighbors import KernelDensity
 import matplotlib.pyplot as plt
 
 # Data
-data = np.array([1, 0.9, 1.1, 1, 1]).reshape(-1, 1)
+data = np.array([0.5,1, 0.9, 0.1, 0.5, 0.24,0.4,1.2,0.1]).reshape(-1, 1)
 
 # Kernel Density Estimation
-kde = KernelDensity(kernel='gaussian', bandwidth=1.5).fit(data)
+kde = KernelDensity(kernel='gaussian', bandwidth=1).fit(data)
 x_d = np.linspace(-10, 10, 1000).reshape(-1, 1)
 log_dens = kde.score_samples(x_d)
 
 
-test_value = np.array([[6]])
+test_value = np.array([[4]])
 print('Test Value:', np.exp(kde.score(test_value)))
 
 # Visualization

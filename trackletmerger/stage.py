@@ -11,6 +11,7 @@ from visionlib.pipeline.publisher import RedisPublisher
 from .config import TrackletMergerConfig
 from .trackletmerger import TrackletMerger
 import atexit
+from visionapi_yq.messages_pb2 import Detection, SaeMessage
 
 logger = logging.getLogger(__name__)
 
@@ -18,10 +19,48 @@ REDIS_PUBLISH_DURATION = Histogram('my_stage_redis_publish_duration', 'The time 
                                    buckets=(0.0025, 0.005, 0.0075, 0.01, 0.025, 0.05, 0.075, 0.1, 0.15, 0.2, 0.25))
 FRAME_COUNTER = Counter('my_stage_frame_counter', 'How many frames have been consumed from the Redis input stream')
 
-def save_results(merged_results):
-    with open("merged_results.txt", "w") as f:
-        for line in merged_results:
-            f.write(line + "\n")
+
+def print_match_dict_without_detections(match_dict):
+    for stream_id, tracks in match_dict.items():
+        print(f"Stream: {stream_id}")
+        for track_id, track_data in tracks.items():
+            # Create a shallow copy excluding 'detections_info'
+            clean_data = {k: v for k, v in track_data.items() if k != 'detections_info'}
+            print(f"  Track ID {track_id}: {clean_data}")
+
+def save_results(match_dict,img_size,first_frame_timestamp,save_path):
+    # the result is a matched dict[]
+    # {cam} {id_index} {frame_num} {x1:.2f} {y1:.2f} {width:.2f} {height:.2f} {xworld} {yworld}
+    # NB is '1' SB is '2'
+    frame_id_list = [] 
+    w = img_size[0]
+    h = img_size[1]
+    time_max = first_frame_timestamp
+    print_match_dict_without_detections(match_dict)
+    with open(save_path, "w") as f:
+        for stream_id in match_dict:
+            cam = 1 if stream_id == 'stream1' else 2
+            for track_id in match_dict[stream_id]:
+                id_index = match_dict[stream_id][track_id]['new_track_id']
+                for detection_bbox, timestamp,frame_id in match_dict[stream_id][track_id]['detections_info']:
+                    if timestamp < first_frame_timestamp:
+                        logger.warning(f"Detection timestamp {timestamp} is before the first frame timestamp {first_frame_timestamp}")
+                        continue
+                    if frame_id not in frame_id_list:
+                        frame_id_list.append(frame_id)
+                    time_max = max(timestamp, time_max)
+                    x1 = detection_bbox.min_x * w
+                    y1 = detection_bbox.min_y * h
+                    width = (detection_bbox.max_x - detection_bbox.min_x) * w
+                    height = (detection_bbox.max_y - detection_bbox.min_y) * h
+                    if x1 == 0 and y1 == 0 and width == 0 and height == 0:
+                        logger.warning(f"Detection bbox is zero: {detection_bbox}")
+                        continue
+                    line = f"{cam} {id_index} {frame_id} {x1:.2f} {y1:.2f} {width:.2f} {height:.2f} {-1} {-1}"
+                    f.write(line + "\n")
+                    
+    completion_ratio = len(frame_id_list) / max(frame_id_list)
+    logger.info(f'The frame completion ratio: {completion_ratio:.3f}')
 
 def run_stage():
 
@@ -43,11 +82,19 @@ def run_stage():
 
     logger.info(f'Starting prometheus metrics endpoint on port {CONFIG.prometheus_port}')
 
-    # start_http_server(CONFIG.prometheus_port)
+    start_http_server(CONFIG.prometheus_port)
 
     logger.info(f'Starting geo mapper stage. Config: {CONFIG.model_dump_json(indent=2)}')
 
     trackletmerger = TrackletMerger(CONFIG.merging_config,CONFIG.log_level)
+
+    def exit_handler():
+        logger.info("Program exiting. Saving results to file...")
+        match_dict, img_size, first_frame_timestamp = trackletmerger.get_results()
+        save_results(match_dict, img_size, first_frame_timestamp,CONFIG.save_path)
+
+    # Save all results to file on exit
+    atexit.register(exit_handler)
 
     consume = RedisConsumer(CONFIG.redis.host, CONFIG.redis.port, 
                             stream_keys=[f'{CONFIG.redis.input_stream_prefix}:{stream_id}' for stream_id in CONFIG.merging_config.input_stream_ids],
@@ -59,8 +106,8 @@ def run_stage():
             if stop_event.is_set():
                 break
 
-            if proto_data is None:
-                time.sleep(0.01)
+            if proto_data is None or stream_key is None:
+                continue
 
             if proto_data is not None:
                 FRAME_COUNTER.inc()
@@ -72,6 +119,3 @@ def run_stage():
 
             with REDIS_PUBLISH_DURATION.time():
                 publish(f'{CONFIG.redis.output_stream_prefix}:{stream_id}', output_proto_data)
-
-        # Once the loop is done, write the results to a text file:
-        atexit.register(save_results(trackletmerger.results))
