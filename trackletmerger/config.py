@@ -27,6 +27,7 @@ class TrackletMergerConfig(BaseSettings):
     redis: RedisConfig = RedisConfig()
     prometheus_port: Annotated[int, Field(ge=1024, le=65536)] = 8000
     merging_config: MergingConfig
+    save_path: str = 'merged_results.txt'
 
     model_config = SettingsConfigDict(env_nested_delimiter='__')
 

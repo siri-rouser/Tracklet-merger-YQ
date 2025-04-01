@@ -1,15 +1,17 @@
 import numpy as np
 import logging
-from visionapi_yq.messages_pb2 import SaeMessage,TrackletsByCamera,Tracklet,Trajectory
+from visionapi_yq.messages_pb2 import SaeMessage,TrackletsByCamera,Tracklet,Trajectory, Detection, BoundingBox
 from visionlib.pipeline.tools import get_raw_frame_data
 
 class Trackletdatabase:
     '''Keeps Trajectory() messages'''
-    def __init__(self,logger):
+    def __init__(self,logger,config):
         self.data = Trajectory()
         self.logger = logger  
         self.remove_dict = {}
         self.matched_dict = {}
+        self._matched_dict_initalize(config)
+        self.mini_time = float('inf')
 
     def append(self,input_img, stream_id, sae_msg:SaeMessage):
         '''Update the tracklet database based on sae_msg'''
@@ -21,18 +23,27 @@ class Trackletdatabase:
         width = input_img.shape[1]
         num_new_tracklet = 0
         num_exist_tracklet = 0
+
         if stream_id not in self.data.cameras:
             self.data.cameras[stream_id].CopyFrom(TrackletsByCamera())
         if stream_id not in self.remove_dict:
             self.remove_dict[stream_id] = []
 
         for idx, track_id in enumerate(sae_msg.trajectory.cameras[stream_id].tracklets):
+            # NOTE: The tracklet ID is a float in the protobuf message!!!
             current_tracklet = sae_msg.trajectory.cameras[stream_id].tracklets[track_id]
+            start_time = current_tracklet.detections_info[0].timestamp_utc_ms
             if track_id not in self.remove_dict[stream_id]:
                 if (track_id not in self.data.cameras[stream_id].tracklets):
                     self.data.cameras[stream_id].tracklets[track_id].CopyFrom(current_tracklet)
                     self.data.cameras[stream_id].tracklets[track_id].start_time = sae_msg.frame.timestamp_utc_ms
 
+                    # To make sure we find the right start time (probably the detection module starts earlier than the tracker)
+                    for detection in current_tracklet.detections_info:
+                        self.data.cameras[stream_id].tracklets[track_id].start_time = min(detection.timestamp_utc_ms,self.data.cameras[stream_id].tracklets[track_id].start_time)
+
+                    # Update the mini_time
+                    self.mini_time = min(self.mini_time,self.data.cameras[stream_id].tracklets[track_id].start_time)
                     self.data.cameras[stream_id].tracklets[track_id].end_time = sae_msg.frame.timestamp_utc_ms
                     num_new_tracklet+=1
                 else:
@@ -49,27 +60,25 @@ class Trackletdatabase:
                     # Reassign the updated mean_feature to the repeated field
                     del self.data.cameras[stream_id].tracklets[track_id].mean_feature[:]
                     self.data.cameras[stream_id].tracklets[track_id].mean_feature.extend(updated_mean_feature)
-
-                    # General information update
+                    
+                    # Detection information update
                     detection = self.data.cameras[stream_id].tracklets[track_id].detections_info.add()
-                    for detection_info in current_tracklet.detections_info:
-                        detection = self.data.cameras[stream_id].tracklets[track_id].detections_info.add()
-                        detection.CopyFrom(detection_info)
+                    detection.CopyFrom(current_tracklet.detections_info[-1]) # use [-1] because len(current_tracklet.detections_info) = 1
 
                     self.data.cameras[stream_id].tracklets[track_id].status = 'Active'
                     num_exist_tracklet+=1
+                    
         self.logger.debug(f'num of new tracklet {num_new_tracklet}, num of exist tracklet {num_exist_tracklet}')
 
     def tracklet_status_update(self,stream_id,sae_msg:SaeMessage):
         for idx, track_id in enumerate(self.data.cameras[stream_id].tracklets):
             gap_time = max(sae_msg.frame.timestamp_utc_ms - self.data.cameras[stream_id].tracklets[track_id].end_time,0)
-            if gap_time > 500:
+            if gap_time > 200: # 0.2 second, which mean 3 frames later, it still haven't show up  
                 self.data.cameras[stream_id].tracklets[track_id].status = 'Searching'
-            if gap_time > 10000:
+            if gap_time > 20000:# 20 second, if the it appears on another cam it can still be find
                 self.data.cameras[stream_id].tracklets[track_id].status = 'Lost'
 
     def prune(self,stream_id):
-
         if stream_id not in self.data.cameras:
             self.logger.warning(f"No tracklets found for stream_id {stream_id}")
             return 
@@ -93,24 +102,38 @@ class Trackletdatabase:
             del self.data.cameras[stream_id].tracklets[track_id]
             self.logger.info(f"Pruned tracklet {track_id} from stream_id {stream_id}")
 
-    def matched_dict_initalize(self,config):
+    def _matched_dict_initalize(self,config):
         for stream_id in config.input_stream_ids:
             self.matched_dict[stream_id] = {}
 
-    def matching_result_process(self,reid_dict):
-        '''To add the reid_dict result into self.matched_dict'''
+    def matching_result_process(self, reid_dict,sae_msg:SaeMessage):
         for cam_id in reid_dict:
-            if cam_id == 'c001':
-                stream_key = 'stream1'
-            elif cam_id == 'c002':
-                stream_key = 'stream2'
-            else:
-                raise ValueError('Cam id not avilable')
-                
+            stream_key = 'stream1' if cam_id == 'c001' else 'stream2'
             for track_id in reid_dict[cam_id]:
                 if track_id not in self.matched_dict[stream_key]:
-                    self.matched_dict[stream_key][track_id] = {}
-                
-                self.matched_dict[stream_key][track_id]['ori_track_id'] = track_id
-                self.matched_dict[stream_key][track_id]['dis'] = reid_dict[cam_id][track_id]['dis']
-                self.matched_dict[stream_key][track_id]['new_track_id'] = reid_dict[cam_id][track_id]['id']
+                    self.matched_dict[stream_key][track_id] = {
+                        'ori_track_id': track_id,
+                        'dis': reid_dict[cam_id][track_id]['dis'],
+                        'new_track_id': reid_dict[cam_id][track_id]['id'],
+                        'detections_info': []
+                    }
+
+                track_key = str(float(track_id))
+                if track_key in self.data.cameras[stream_key].tracklets:
+                    for detection_proto in self.data.cameras[stream_key].tracklets[track_key].detections_info:
+
+                        bbox = detection_proto.bounding_box
+                        timestamp = detection_proto.timestamp_utc_ms
+                        # print('Current time stamp:',sae_msg.frame.timestamp_utc_ms, 'And the detection time stamp:',timestamp) # for test
+                        frame_id = detection_proto.frame_id  # Ensure this field actually exists in Detection message
+
+                        detection_tuple = (bbox, timestamp, frame_id)
+
+                        if detection_tuple not in self.matched_dict[stream_key][track_id]['detections_info']:
+                            if timestamp < self.mini_time:
+                                self.logger.warning(
+                                    f"Detection timestamp {timestamp} is before the first frame timestamp {self.mini_time}"
+                                )
+                            self.matched_dict[stream_key][track_id]['detections_info'].append(detection_tuple)
+                else:
+                    self.logger.warning(f"Track ID {track_id} not found in stream {stream_key}.")

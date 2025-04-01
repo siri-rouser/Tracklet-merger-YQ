@@ -30,12 +30,10 @@ def tracklet_match(config, logger,image,tracklets1:SaeMessage,tracklets2:SaeMess
     logger.info(f'tracklets1 length before filter {len(tracklets1)}, and tracklets1 length after filter {len(filtered_tracklets1)}')
     logger.info(f'tracklets2 length before filter {len(tracklets2)}, and tracklets2 length after filter {len(filtered_tracklets2)}')
 
-
     if len(filtered_tracklets1) != 0 and len(filtered_tracklets2) != 0:
 
         cm = CostMatrix(filtered_tracklets1,filtered_tracklets2)
         dismat, q_track_ids, q_cam_ids, g_track_ids, g_cam_ids, q_times, g_times, q_statuses, g_statuses, q_class_ids, g_class_ids = cm.cost_matrix(metric = config.matching_metric)
-        print(dismat)
 
         reid_dict = {}
         if dismat.size > 0:
@@ -86,39 +84,39 @@ def tracklet_filter(logger, img, tracklets: Dict[str, Tracklet]):
 
 
         # Filter out tracklets with a duration less than 0.5 seconds (500 ms)
-        if time_duration_ms < 500:
-            logger.debug('time_duration_ms < 500')
-            logger.debug(time_duration_ms)
+        if time_duration_ms < 200:
+            # logger.debug('time_duration_ms < 500')
+            # logger.debug(time_duration_ms)
             continue
 
         # Ensure there are enough detections to calculate movement
         if len(tracklet.detections_info) < 2:
-            logger.debug('detection info not complete')
+            # logger.debug('detection info not complete')
             continue
 
         # Extract bounding box details
-        start_bbox = np.array([
-            tracklet.detections_info[0].bounding_box.min_x,
-            tracklet.detections_info[0].bounding_box.min_y,
-            tracklet.detections_info[0].bounding_box.max_x,
-            tracklet.detections_info[0].bounding_box.max_y,
-        ])
-        last_bbox = np.array([
-            tracklet.detections_info[-1].bounding_box.min_x,
-            tracklet.detections_info[-1].bounding_box.min_y,
-            tracklet.detections_info[-1].bounding_box.max_x,
-            tracklet.detections_info[-1].bounding_box.max_y,
-        ])
+        # start_bbox = np.array([
+        #     tracklet.detections_info[0].bounding_box.min_x,
+        #     tracklet.detections_info[0].bounding_box.min_y,
+        #     tracklet.detections_info[0].bounding_box.max_x,
+        #     tracklet.detections_info[0].bounding_box.max_y,
+        # ])
+        # last_bbox = np.array([
+        #     tracklet.detections_info[-1].bounding_box.min_x,
+        #     tracklet.detections_info[-1].bounding_box.min_y,
+        #     tracklet.detections_info[-1].bounding_box.max_x,
+        #     tracklet.detections_info[-1].bounding_box.max_y,
+        # ])
 
-        # Use the Numba-accelerated function
-        distance = calculate_distance(start_bbox, last_bbox)
+        # # Use the Numba-accelerated function
+        # distance = calculate_distance(start_bbox, last_bbox)
         
-        # Filter out tracklets that move less than 1/5th of the image height
-        if distance < (1 / 8):
-            logger.debug('car is stastic')
-            tracklet.age += 1
-            logger.debug(distance)
-            continue
+        # # Filter out tracklets that move less than 1/5th of the image height
+        # if distance < (1 / 8):
+        #     logger.debug('car is stastic')
+        #     tracklet.age += 1
+        #     logger.debug(distance)
+        #     continue
 
         # If the tracklet meets all criteria, add it to the filtered dictionary
         filtered_tracklets[track_id] = tracklet
@@ -136,4 +134,3 @@ def unpack_proto(sae_message_bytes):
     input_image = get_raw_frame_data(input_frame)
 
     return input_image, sae_msg
-

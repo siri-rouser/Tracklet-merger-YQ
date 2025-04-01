@@ -8,3 +8,4 @@ cache
 *.yaml
 !settings.template.yaml
 reid_dict.txt
+*.mp4
