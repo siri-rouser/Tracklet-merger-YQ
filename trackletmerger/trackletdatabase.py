@@ -107,33 +107,66 @@ class Trackletdatabase:
             self.matched_dict[stream_id] = {}
 
     def matching_result_process(self, reid_dict,sae_msg:SaeMessage):
-        for cam_id in reid_dict:
-            stream_key = 'stream1' if cam_id == 'c001' else 'stream2'
-            for track_id in reid_dict[cam_id]:
-                if track_id not in self.matched_dict[stream_key]:
-                    self.matched_dict[stream_key][track_id] = {
-                        'ori_track_id': track_id,
-                        'dis': reid_dict[cam_id][track_id]['dis'],
-                        'new_track_id': reid_dict[cam_id][track_id]['id'],
-                        'detections_info': []
-                    }
+        if reid_dict is not None:
+            for cam_id in reid_dict:
+                stream_key = 'stream1' if cam_id == 'c001' else 'stream2'
+                for track_id in reid_dict[cam_id]:
 
+                    # Initalize the macthed_dict
+                    if track_id not in self.matched_dict[stream_key]:
+                        self.matched_dict[stream_key][track_id] = {
+                            'ori_track_id': track_id,
+                            'dis': reid_dict[cam_id][track_id]['dis'],
+                            'new_track_id': reid_dict[cam_id][track_id]['id'],
+                            'detections_info': []
+                        }
+
+                    # Update Information
+                    track_key = str(float(track_id))
+                    if track_key in self.data.cameras[stream_key].tracklets:
+
+                        # Update detection information
+                        for detection_proto in self.data.cameras[stream_key].tracklets[track_key].detections_info:
+
+                            bbox = detection_proto.bounding_box
+                            timestamp = detection_proto.timestamp_utc_ms
+                            frame_id = detection_proto.frame_id  
+
+                            detection_tuple = (bbox, timestamp, frame_id)
+
+                            if detection_tuple not in self.matched_dict[stream_key][track_id]['detections_info']:
+                                if timestamp < self.mini_time:
+                                    self.logger.warning(
+                                        f"Detection timestamp {timestamp} is before the first frame timestamp {self.mini_time}"
+                                    )
+                                self.matched_dict[stream_key][track_id]['detections_info'].append(detection_tuple)
+
+                        # Update the rest of information
+                        self.matched_dict[stream_key][track_id]['dis'] = (1/(len(self.matched_dict[stream_key][track_id]['detections_info'])+1)) * reid_dict[cam_id][track_id]['dis'] + (len(self.matched_dict[stream_key][track_id]['detections_info'])/(len(self.matched_dict[stream_key][track_id]['detections_info'])+1))*self.matched_dict[stream_key][track_id]['dis']
+
+                    else:
+                        self.logger.warning(f"Track ID {track_id} not found in stream {stream_key}.")
+
+        # Update information to tracklet even if this track is not been matched on this frame
+        for stream_key in self.matched_dict:
+            for track_id in self.matched_dict[stream_key]:
                 track_key = str(float(track_id))
                 if track_key in self.data.cameras[stream_key].tracklets:
                     for detection_proto in self.data.cameras[stream_key].tracklets[track_key].detections_info:
-
                         bbox = detection_proto.bounding_box
                         timestamp = detection_proto.timestamp_utc_ms
-                        # print('Current time stamp:',sae_msg.frame.timestamp_utc_ms, 'And the detection time stamp:',timestamp) # for test
-                        frame_id = detection_proto.frame_id  # Ensure this field actually exists in Detection message
+                        frame_id = detection_proto.frame_id  
 
                         detection_tuple = (bbox, timestamp, frame_id)
 
-                        if detection_tuple not in self.matched_dict[stream_key][track_id]['detections_info']:
-                            if timestamp < self.mini_time:
-                                self.logger.warning(
-                                    f"Detection timestamp {timestamp} is before the first frame timestamp {self.mini_time}"
-                                )
+                        if timestamp < self.mini_time:
+                            self.logger.warning(
+                                f"Detection timestamp {timestamp} is before the first frame timestamp {self.mini_time}"
+                            )
+                            continue  # Skip adding detections with invalid timestamp
+
+                        if detection_tuple not in self.matched_dict[stream_key][track_id]['detections_info'] \
+                            and self.data.cameras[stream_key].tracklets[track_key].status == 'Active':
                             self.matched_dict[stream_key][track_id]['detections_info'].append(detection_tuple)
-                else:
-                    self.logger.warning(f"Track ID {track_id} not found in stream {stream_key}.")
+                # else:
+                #     self.logger.warning(f"Track ID {track_id} not found in stream {stream_key} during update.")

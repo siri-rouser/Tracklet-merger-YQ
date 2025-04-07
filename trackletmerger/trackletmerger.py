@@ -53,8 +53,8 @@ class TrackletMerger:
             reid_dict = tracklet_match(self._config,logger,frame_image,tracklets1,tracklets2)
             print(reid_dict)
 
-        if reid_dict is not None:
-            self._trackletdatabase.matching_result_process(reid_dict,sae_msg)
+        
+        self._trackletdatabase.matching_result_process(reid_dict,sae_msg)
 
         self._trackletdatabase.prune(stream_id)
             

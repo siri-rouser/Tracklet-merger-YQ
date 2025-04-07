@@ -20,6 +20,50 @@ REDIS_PUBLISH_DURATION = Histogram('my_stage_redis_publish_duration', 'The time 
 FRAME_COUNTER = Counter('my_stage_frame_counter', 'How many frames have been consumed from the Redis input stream')
 
 
+
+def filter_match_dict(match_dict):
+    '''
+    Remove duplicates based on 'new_track_id' within each 'stream_key'.
+    Keeps the entry with the lowest 'dis' and logs any removals.
+    '''
+
+    for stream_key, tracks in match_dict.items():
+        new_track_id_map = {}
+
+        # Find lowest dis for each new_track_id within this stream_key
+        for track_id, data in tracks.items():
+            new_id = data['new_track_id']
+            dis = data['dis']
+
+            if new_id not in new_track_id_map:
+                new_track_id_map[new_id] = (track_id, dis)
+            else:
+                existing_track_id, existing_dis = new_track_id_map[new_id]
+                if dis < existing_dis:
+                    # Current entry has lower dis; mark previous one for deletion
+                    logger.info(
+                        f"[{stream_key}] Removing duplicate tracklet {existing_track_id} "
+                        f"(dis={existing_dis:.4f}) due to higher dis compared to {track_id} (dis={dis:.4f})"
+                    )
+                    match_dict[stream_key][existing_track_id]['to_remove'] = True
+                    new_track_id_map[new_id] = (track_id, dis)
+                else:
+                    # Current entry has higher dis; mark current entry for deletion
+                    logger.info(
+                        f"[{stream_key}] Removing duplicate tracklet {track_id} "
+                        f"(dis={dis:.4f}) due to higher dis compared to {existing_track_id} (dis={existing_dis:.4f})"
+                    )
+                    match_dict[stream_key][track_id]['to_remove'] = True
+
+    # Remove marked entries
+    for stream_key, tracks in match_dict.items():
+        remove_keys = [track_id for track_id, data in tracks.items() if data.get('to_remove')]
+        for track_id in remove_keys:
+            del match_dict[stream_key][track_id]
+
+    return match_dict
+
+
 def print_match_dict_without_detections(match_dict):
     for stream_id, tracks in match_dict.items():
         print(f"Stream: {stream_id}")
@@ -37,6 +81,9 @@ def save_results(match_dict,img_size,first_frame_timestamp,save_path):
     h = img_size[1]
     time_max = first_frame_timestamp
     print_match_dict_without_detections(match_dict)
+
+    match_dict = filter_match_dict(match_dict)
+
     with open(save_path, "w") as f:
         for stream_id in match_dict:
             cam = 1 if stream_id == 'stream1' else 2
