@@ -1,0 +1,576 @@
+{
+    "stream1": {
+        "2": {
+            "ori_track_id": 2,
+            "dis": 0.21594221574156908,
+            "new_track_id": 2
+        },
+        "3": {
+            "ori_track_id": 3,
+            "dis": 0.36504805446048333,
+            "new_track_id": 3
+        },
+        "5": {
+            "ori_track_id": 5,
+            "dis": 0.1782026166532839,
+            "new_track_id": 5
+        },
+        "6": {
+            "ori_track_id": 6,
+            "dis": 0.2865968766389901,
+            "new_track_id": 6
+        },
+        "8": {
+            "ori_track_id": 8,
+            "dis": 0.5536768745713406,
+            "new_track_id": 8
+        },
+        "9": {
+            "ori_track_id": 9,
+            "dis": 0.228402425196097,
+            "new_track_id": 9
+        },
+        "4": {
+            "ori_track_id": 4,
+            "dis": 0.10299708136692867,
+            "new_track_id": 4
+        },
+        "12": {
+            "ori_track_id": 12,
+            "dis": 0.32200689420647544,
+            "new_track_id": 12
+        },
+        "14": {
+            "ori_track_id": 14,
+            "dis": 0.12211236633589309,
+            "new_track_id": 14
+        },
+        "15": {
+            "ori_track_id": 15,
+            "dis": 0.24146108886959897,
+            "new_track_id": 15
+        },
+        "16": {
+            "ori_track_id": 16,
+            "dis": 0.09587025799147468,
+            "new_track_id": 16
+        },
+        "18": {
+            "ori_track_id": 18,
+            "dis": 0.3433555413865571,
+            "new_track_id": 18
+        },
+        "17": {
+            "ori_track_id": 17,
+            "dis": 0.3988230669199981,
+            "new_track_id": 17
+        },
+        "21": {
+            "ori_track_id": 21,
+            "dis": 0.29347905271271046,
+            "new_track_id": 21
+        },
+        "19": {
+            "ori_track_id": 19,
+            "dis": 0.2859311530964459,
+            "new_track_id": 19
+        },
+        "20": {
+            "ori_track_id": 20,
+            "dis": 0.3961907532711296,
+            "new_track_id": 20
+        },
+        "22": {
+            "ori_track_id": 22,
+            "dis": 0.26201296438598604,
+            "new_track_id": 22
+        },
+        "24": {
+            "ori_track_id": 24,
+            "dis": 0.03879272766045116,
+            "new_track_id": 24
+        },
+        "25": {
+            "ori_track_id": 25,
+            "dis": 0.38409046116487017,
+            "new_track_id": 25
+        },
+        "26": {
+            "ori_track_id": 26,
+            "dis": 0.37743687524345826,
+            "new_track_id": 26
+        },
+        "28": {
+            "ori_track_id": 28,
+            "dis": 0.4608498714653567,
+            "new_track_id": 28
+        },
+        "27": {
+            "ori_track_id": 27,
+            "dis": 0.2620960566887088,
+            "new_track_id": 27
+        },
+        "30": {
+            "ori_track_id": 30,
+            "dis": 0.3079580870197336,
+            "new_track_id": 30
+        },
+        "29": {
+            "ori_track_id": 29,
+            "dis": 0.174520074006698,
+            "new_track_id": 29
+        },
+        "31": {
+            "ori_track_id": 31,
+            "dis": 0.4512331666315585,
+            "new_track_id": 31
+        },
+        "32": {
+            "ori_track_id": 32,
+            "dis": 0.24990779601586235,
+            "new_track_id": 32
+        },
+        "34": {
+            "ori_track_id": 34,
+            "dis": 0.17899155608951917,
+            "new_track_id": 34
+        },
+        "36": {
+            "ori_track_id": 36,
+            "dis": 0.34441001716472386,
+            "new_track_id": 36
+        },
+        "35": {
+            "ori_track_id": 35,
+            "dis": 0.1814761197300219,
+            "new_track_id": 35
+        },
+        "37": {
+            "ori_track_id": 37,
+            "dis": 0.29754492816068856,
+            "new_track_id": 37
+        },
+        "38": {
+            "ori_track_id": 38,
+            "dis": 0.3000835530612914,
+            "new_track_id": 38
+        },
+        "40": {
+            "ori_track_id": 40,
+            "dis": 0.46330498096459904,
+            "new_track_id": 40
+        },
+        "39": {
+            "ori_track_id": 39,
+            "dis": 0.37965659851394196,
+            "new_track_id": 39
+        },
+        "42": {
+            "ori_track_id": 42,
+            "dis": 0.20625836116225557,
+            "new_track_id": 42
+        },
+        "43": {
+            "ori_track_id": 43,
+            "dis": 0.3927201519925143,
+            "new_track_id": 43
+        },
+        "44": {
+            "ori_track_id": 44,
+            "dis": 0.3300419925048007,
+            "new_track_id": 44
+        },
+        "41": {
+            "ori_track_id": 41,
+            "dis": 0.26250070310665763,
+            "new_track_id": 41
+        },
+        "46": {
+            "ori_track_id": 46,
+            "dis": 0.18419401740479205,
+            "new_track_id": 46
+        },
+        "48": {
+            "ori_track_id": 48,
+            "dis": 0.25974785258317956,
+            "new_track_id": 48
+        },
+        "45": {
+            "ori_track_id": 45,
+            "dis": 0.3712569890115103,
+            "new_track_id": 45
+        },
+        "49": {
+            "ori_track_id": 49,
+            "dis": 0.4901967705300471,
+            "new_track_id": 49
+        },
+        "51": {
+            "ori_track_id": 51,
+            "dis": 0.5831672529842954,
+            "new_track_id": 51
+        },
+        "55": {
+            "ori_track_id": 55,
+            "dis": 0.4057892304042532,
+            "new_track_id": 55
+        },
+        "54": {
+            "ori_track_id": 54,
+            "dis": 0.16492736559185817,
+            "new_track_id": 54
+        },
+        "58": {
+            "ori_track_id": 58,
+            "dis": -0.03263689057270341,
+            "new_track_id": 58
+        },
+        "57": {
+            "ori_track_id": 57,
+            "dis": 0.17248876797171778,
+            "new_track_id": 57
+        },
+        "59": {
+            "ori_track_id": 59,
+            "dis": 0.32784442915789247,
+            "new_track_id": 59
+        },
+        "62": {
+            "ori_track_id": 62,
+            "dis": 0.21653737402082168,
+            "new_track_id": 62
+        },
+        "61": {
+            "ori_track_id": 61,
+            "dis": 0.10738780976875477,
+            "new_track_id": 61
+        },
+        "64": {
+            "ori_track_id": 64,
+            "dis": 0.4298220418515016,
+            "new_track_id": 64
+        },
+        "65": {
+            "ori_track_id": 65,
+            "dis": 0.24029048355486116,
+            "new_track_id": 65
+        },
+        "66": {
+            "ori_track_id": 66,
+            "dis": 0.08769096921474684,
+            "new_track_id": 66
+        },
+        "67": {
+            "ori_track_id": 67,
+            "dis": 0.4182488060960318,
+            "new_track_id": 67
+        },
+        "68": {
+            "ori_track_id": 68,
+            "dis": 0.46846471373261134,
+            "new_track_id": 68
+        },
+        "69": {
+            "ori_track_id": 69,
+            "dis": 0.08431816452939032,
+            "new_track_id": 69
+        },
+        "70": {
+            "ori_track_id": 70,
+            "dis": 0.44556532465045234,
+            "new_track_id": 70
+        },
+        "71": {
+            "ori_track_id": 71,
+            "dis": 0.2650519013404846,
+            "new_track_id": 71
+        }
+    },
+    "stream2": {
+        "5": {
+            "ori_track_id": 5,
+            "dis": 0.2207502967646004,
+            "new_track_id": 2
+        },
+        "7": {
+            "ori_track_id": 7,
+            "dis": 0.4238238615575363,
+            "new_track_id": 3
+        },
+        "9": {
+            "ori_track_id": 9,
+            "dis": 0.23492049798282771,
+            "new_track_id": 5
+        },
+        "10": {
+            "ori_track_id": 10,
+            "dis": 0.3090711643429197,
+            "new_track_id": 6
+        },
+        "11": {
+            "ori_track_id": 11,
+            "dis": 0.577595108602457,
+            "new_track_id": 8
+        },
+        "12": {
+            "ori_track_id": 12,
+            "dis": 0.25087087610919023,
+            "new_track_id": 9
+        },
+        "14": {
+            "ori_track_id": 14,
+            "dis": 0.10646209220467082,
+            "new_track_id": 4
+        },
+        "13": {
+            "ori_track_id": 13,
+            "dis": 0.3071083737525546,
+            "new_track_id": 12
+        },
+        "15": {
+            "ori_track_id": 15,
+            "dis": 0.11598532394369956,
+            "new_track_id": 14
+        },
+        "16": {
+            "ori_track_id": 16,
+            "dis": 0.38258257143631413,
+            "new_track_id": 15
+        },
+        "18": {
+            "ori_track_id": 18,
+            "dis": 0.0817659942409058,
+            "new_track_id": 16
+        },
+        "17": {
+            "ori_track_id": 17,
+            "dis": 0.35501927898040897,
+            "new_track_id": 18
+        },
+        "21": {
+            "ori_track_id": 21,
+            "dis": 0.4083257962043253,
+            "new_track_id": 17
+        },
+        "20": {
+            "ori_track_id": 20,
+            "dis": 0.2859610102495077,
+            "new_track_id": 21
+        },
+        "23": {
+            "ori_track_id": 23,
+            "dis": 0.27923703739004246,
+            "new_track_id": 19
+        },
+        "24": {
+            "ori_track_id": 24,
+            "dis": 0.36976133695226204,
+            "new_track_id": 20
+        },
+        "22": {
+            "ori_track_id": 22,
+            "dis": 0.2804423236693294,
+            "new_track_id": 22
+        },
+        "26": {
+            "ori_track_id": 26,
+            "dis": 0.09407805934960223,
+            "new_track_id": 24
+        },
+        "27": {
+            "ori_track_id": 27,
+            "dis": 0.3543603456459684,
+            "new_track_id": 25
+        },
+        "29": {
+            "ori_track_id": 29,
+            "dis": 0.42798969707937484,
+            "new_track_id": 26
+        },
+        "30": {
+            "ori_track_id": 30,
+            "dis": 0.4761765251013966,
+            "new_track_id": 28
+        },
+        "33": {
+            "ori_track_id": 33,
+            "dis": 0.2665413178178896,
+            "new_track_id": 27
+        },
+        "31": {
+            "ori_track_id": 31,
+            "dis": 0.36171130885936487,
+            "new_track_id": 30
+        },
+        "34": {
+            "ori_track_id": 34,
+            "dis": 0.2727137908119034,
+            "new_track_id": 29
+        },
+        "37": {
+            "ori_track_id": 37,
+            "dis": 0.4546768621310697,
+            "new_track_id": 31
+        },
+        "38": {
+            "ori_track_id": 38,
+            "dis": 0.23657426153885835,
+            "new_track_id": 32
+        },
+        "39": {
+            "ori_track_id": 39,
+            "dis": 0.17649031634099493,
+            "new_track_id": 34
+        },
+        "40": {
+            "ori_track_id": 40,
+            "dis": 0.3171333371732984,
+            "new_track_id": 36
+        },
+        "42": {
+            "ori_track_id": 42,
+            "dis": 0.17999590001102406,
+            "new_track_id": 35
+        },
+        "41": {
+            "ori_track_id": 41,
+            "dis": 0.28685888869361004,
+            "new_track_id": 37
+        },
+        "44": {
+            "ori_track_id": 44,
+            "dis": 0.3042271459352297,
+            "new_track_id": 38
+        },
+        "45": {
+            "ori_track_id": 45,
+            "dis": 0.5213492873015496,
+            "new_track_id": 40
+        },
+        "46": {
+            "ori_track_id": 46,
+            "dis": 0.3800003355168457,
+            "new_track_id": 39
+        },
+        "48": {
+            "ori_track_id": 48,
+            "dis": 0.273459712803532,
+            "new_track_id": 42
+        },
+        "49": {
+            "ori_track_id": 49,
+            "dis": 0.3006349580909778,
+            "new_track_id": 43
+        },
+        "50": {
+            "ori_track_id": 50,
+            "dis": 0.37381166524207343,
+            "new_track_id": 44
+        },
+        "52": {
+            "ori_track_id": 52,
+            "dis": 0.2625120478950068,
+            "new_track_id": 41
+        },
+        "51": {
+            "ori_track_id": 51,
+            "dis": 0.19820212984439342,
+            "new_track_id": 46
+        },
+        "53": {
+            "ori_track_id": 53,
+            "dis": 0.3584038202009491,
+            "new_track_id": 48
+        },
+        "60": {
+            "ori_track_id": 60,
+            "dis": 0.37798344859771243,
+            "new_track_id": 45
+        },
+        "54": {
+            "ori_track_id": 54,
+            "dis": 0.5257835473596032,
+            "new_track_id": 49
+        },
+        "55": {
+            "ori_track_id": 55,
+            "dis": 0.5916842289895695,
+            "new_track_id": 51
+        },
+        "59": {
+            "ori_track_id": 59,
+            "dis": 0.41004303352492927,
+            "new_track_id": 55
+        },
+        "64": {
+            "ori_track_id": 64,
+            "dis": 0.11607460886441393,
+            "new_track_id": 54
+        },
+        "63": {
+            "ori_track_id": 63,
+            "dis": -0.02055713959889602,
+            "new_track_id": 58
+        },
+        "73": {
+            "ori_track_id": 73,
+            "dis": 0.1650340182398147,
+            "new_track_id": 57
+        },
+        "82": {
+            "ori_track_id": 82,
+            "dis": 0.2987657463665109,
+            "new_track_id": 59
+        },
+        "81": {
+            "ori_track_id": 81,
+            "dis": 0.11127042155568158,
+            "new_track_id": 62
+        },
+        "93": {
+            "ori_track_id": 93,
+            "dis": 0.09511588083263986,
+            "new_track_id": 61
+        },
+        "84": {
+            "ori_track_id": 84,
+            "dis": 0.46344619676542115,
+            "new_track_id": 64
+        },
+        "87": {
+            "ori_track_id": 87,
+            "dis": 0.23294658368036344,
+            "new_track_id": 65
+        },
+        "88": {
+            "ori_track_id": 88,
+            "dis": 0.13780371828709242,
+            "new_track_id": 66
+        },
+        "89": {
+            "ori_track_id": 89,
+            "dis": 0.42149408501090163,
+            "new_track_id": 67
+        },
+        "97": {
+            "ori_track_id": 97,
+            "dis": 0.4718481374851892,
+            "new_track_id": 68
+        },
+        "96": {
+            "ori_track_id": 96,
+            "dis": 0.10328754835016836,
+            "new_track_id": 62
+        },
+        "99": {
+            "ori_track_id": 99,
+            "dis": 0.4873544629630234,
+            "new_track_id": 70
+        },
+        "102": {
+            "ori_track_id": 102,
+            "dis": 0.2650519013404846,
+            "new_track_id": 71
+        }
+    }
+}

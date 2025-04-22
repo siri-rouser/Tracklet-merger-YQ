@@ -1,5 +1,6 @@
 import logging
 import time
+import json
 from typing import Any, Dict, NamedTuple,Dict, List, Optional, Tuple
 
 from prometheus_client import Counter, Histogram, Summary
@@ -46,12 +47,12 @@ class TrackletMerger:
 
         self._trackletdatabase.append(frame_image,stream_id,sae_msg)
         self._trackletdatabase.tracklet_status_update(stream_id,sae_msg)
+        self._trackletdatabase.zone_assignment(stream_id)
 
         if (self._trackletdatabase.data.cameras['stream1'].tracklets is not None) and (self._trackletdatabase.data.cameras['stream2'].tracklets is not None):
             tracklets1 = self._trackletdatabase.data.cameras['stream1'].tracklets
             tracklets2 = self._trackletdatabase.data.cameras['stream2'].tracklets
             reid_dict = tracklet_match(self._config,logger,frame_image,tracklets1,tracklets2)
-            print(reid_dict)
 
         
         self._trackletdatabase.matching_result_process(reid_dict,sae_msg)

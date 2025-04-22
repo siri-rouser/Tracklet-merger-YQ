@@ -21,6 +21,9 @@ class MergingConfig(BaseModel):
     dis_remove: float
     dis_alpha: float
     dis_beta: float
+    lost_time_ms: int
+    searching_time_ms: int
+    pre_defined_zones: conlist(str)
 
 class TrackletMergerConfig(BaseSettings):
     log_level: LogLevel = LogLevel.WARNING
@@ -28,6 +31,7 @@ class TrackletMergerConfig(BaseSettings):
     prometheus_port: Annotated[int, Field(ge=1024, le=65536)] = 8000
     merging_config: MergingConfig
     save_path: str = 'merged_results.txt'
+
 
     model_config = SettingsConfigDict(env_nested_delimiter='__')
 
