@@ -3,6 +3,7 @@ import signal
 import threading
 import time
 from typing import List, Tuple
+import json
 
 from prometheus_client import Counter, Histogram, start_http_server
 from visionlib.pipeline.consumer import RedisConsumer
@@ -18,7 +19,6 @@ logger = logging.getLogger(__name__)
 REDIS_PUBLISH_DURATION = Histogram('my_stage_redis_publish_duration', 'The time it takes to push a message onto the Redis stream',
                                    buckets=(0.0025, 0.005, 0.0075, 0.01, 0.025, 0.05, 0.075, 0.1, 0.15, 0.2, 0.25))
 FRAME_COUNTER = Counter('my_stage_frame_counter', 'How many frames have been consumed from the Redis input stream')
-
 
 
 def filter_match_dict(match_dict):
@@ -65,12 +65,21 @@ def filter_match_dict(match_dict):
 
 
 def print_match_dict_without_detections(match_dict):
+    json_path = 'match_dict.json'
+    match_dict_no_detections = {}
     for stream_id, tracks in match_dict.items():
         print(f"Stream: {stream_id}")
+        match_dict_no_detections[stream_id] = {}
         for track_id, track_data in tracks.items():
             # Create a shallow copy excluding 'detections_info'
-            clean_data = {k: v for k, v in track_data.items() if k != 'detections_info'}
-            print(f"  Track ID {track_id}: {clean_data}")
+            clean_data = {'ori_track_id': int(track_data['ori_track_id']),
+                          'dis': float(track_data['dis']),
+                        'new_track_id': int(track_data['new_track_id'])}
+            match_dict_no_detections[stream_id][int(track_id)] = clean_data
+            print(f"Track ID {track_id}: {clean_data}")
+
+    with open(json_path, 'w') as json_file:
+        json.dump(match_dict_no_detections, json_file, indent=4)
 
 def save_results(match_dict,img_size,first_frame_timestamp,save_path):
     # the result is a matched dict[]
@@ -103,11 +112,14 @@ def save_results(match_dict,img_size,first_frame_timestamp,save_path):
                     if x1 == 0 and y1 == 0 and width == 0 and height == 0:
                         logger.warning(f"Detection bbox is zero: {detection_bbox}")
                         continue
-                    line = f"{cam} {id_index} {frame_id} {x1:.2f} {y1:.2f} {width:.2f} {height:.2f} {-1} {-1}"
+                    line = f"{cam} {id_index} {frame_id} {x1:.2f} {y1:.2f} {width:.2f} {height:.2f} {-1} {-1} {track_id}"
                     f.write(line + "\n")
                     
-    completion_ratio = len(frame_id_list) / max(frame_id_list)
-    logger.info(f'The frame completion ratio: {completion_ratio:.3f}')
+    try:
+        completion_ratio = len(frame_id_list) / max(frame_id_list)
+        logger.critical(f'The frame completion ratio: {completion_ratio:.3f}')
+    except:
+        pass
 
 def run_stage():
 

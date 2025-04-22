@@ -3,7 +3,7 @@ from numba import njit
 import logging
 from typing import Dict
 from visionlib.pipeline.tools import get_raw_frame_data
-from .matching_tool import CostMatrix,calc_reid
+from .matching_tool import CostMatrix,ReIDCalculator
 from .trackletdatabase import Trackletdatabase
 import sys
 sys.path.append('../')
@@ -23,7 +23,7 @@ def tracklet_status_update(stream_id,sae_msg: SaeMessage):
     return sae_msg
 
 
-def tracklet_match(config, logger,image,tracklets1:SaeMessage,tracklets2:SaeMessage):
+def tracklet_match(config, logger:logging,image,tracklets1:SaeMessage,tracklets2:SaeMessage):
 
     filtered_tracklets1 = tracklet_filter(logger,image, tracklets1)
     filtered_tracklets2 = tracklet_filter(logger, image, tracklets2)
@@ -32,21 +32,17 @@ def tracklet_match(config, logger,image,tracklets1:SaeMessage,tracklets2:SaeMess
 
     if len(filtered_tracklets1) != 0 and len(filtered_tracklets2) != 0:
 
-        cm = CostMatrix(filtered_tracklets1,filtered_tracklets2)
-        dismat, q_track_ids, q_cam_ids, g_track_ids, g_cam_ids, q_times, g_times, q_statuses, g_statuses, q_class_ids, g_class_ids = cm.cost_matrix(metric = config.matching_metric)
+        cm = CostMatrix(filtered_tracklets1,filtered_tracklets2,logger)
+        dismat, q_track_ids, q_cam_ids, g_track_ids, g_cam_ids, q_times, g_times, q_statuses, g_statuses, q_class_ids, g_class_ids, q_entry_zn, q_exit_zn, g_enrty_zn, g_exit_zn = cm.cost_matrix(metric = config.matching_metric)
 
-        reid_dict = {}
+        reid_cal = ReIDCalculator(dis_thre=config.dis_thre, dis_remove=config.dis_remove, dis_alpha=config.dis_alpha,dis_beta=config.dis_beta)
         if dismat.size > 0:
-            reid_dict,rm_dict = calc_reid(dismat,q_track_ids,q_cam_ids, g_track_ids, g_cam_ids, q_times, q_statuses, g_statuses, g_times, q_class_ids, g_class_ids,dis_thre=config.dis_thre,dis_remove=config.dis_remove,dis_alpha=config.dis_alpha,dis_beta=config.dis_beta)
-
-        if reid_dict != {}:
-            print(reid_dict)
-            with open("reid_dict.txt", "w") as txt_file:
-                txt_file.write(str(reid_dict))
-    
-        return reid_dict
-
-
+            reid_dict,rm_dict = reid_cal.calc(dismat,q_track_ids,q_cam_ids, g_track_ids, g_cam_ids, q_times, q_statuses, g_statuses, g_times, q_class_ids, g_class_ids, q_entry_zn, q_exit_zn, g_enrty_zn, g_exit_zn)
+            logger.info(reid_dict)
+            return reid_dict
+        else:
+            logger.info('dismat is empty')
+            return None
 
 @njit
 def calculate_distance(start_bbox, last_bbox):
@@ -82,15 +78,14 @@ def tracklet_filter(logger, img, tracklets: Dict[str, Tracklet]):
         # Calculate the duration of the tracklet
         time_duration_ms = tracklet.end_time - tracklet.start_time
 
-
         # Filter out tracklets with a duration less than 0.5 seconds (500 ms)
-        if time_duration_ms < 200:
+        if time_duration_ms < 300:
             # logger.debug('time_duration_ms < 500')
             # logger.debug(time_duration_ms)
             continue
 
         # Ensure there are enough detections to calculate movement
-        if len(tracklet.detections_info) < 2:
+        if len(tracklet.detections_info) < 5:
             # logger.debug('detection info not complete')
             continue
 
