@@ -29,7 +29,7 @@ class Trackletdatabase:
         for stream_id in self.config.input_stream_ids:
             if stream_id == 'stream1':
                 zone_path = self.config.pre_defined_zones[0]
-            elif stream_id == 'stream2':
+            elif stream_id == 'stream2': 
                 zone_path = self.config.pre_defined_zones[1]
 
             if zone_path:
