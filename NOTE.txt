@@ -1,8 +1,10 @@
 (trackletmerge) yuqiang@yuqiang-MS-7D93:~/yl4300/project/Multi-Camera-Vision-Pipeline-YQ/subpackages/tracklet-merger-YQ$ git branch
-  CLM
+  CLM: The CLM version of time2frame
   CLM_zone
-* main
-  time2frame
+* main: Current Version I am working on(12/08/2025)
+  main_backup: Backup of Main on (31/07/2025)
+  time2frame: I think it might refers to commite 3ff95a1029cb23cc5e5cbbbecc51f1b8286edecb on Apr 1, the first time i can achieve evaluation(count frame_id) in SAE engine
+
 (trackletmerge) yuqiang@yuqiang-MS-7D93:~/yl4300/project/Multi-Camera-Vision-Pipeline-YQ/subpackages/tracklet-merger-YQ$ git log
 commit ac53f11917ad4f7798138c3000baa9ec7c132f52 (HEAD -> main, myrepo/main, CLM_zone, CLM)
 Author: siri-rouser <yu.q.lin12@gmail.com>
@@ -13,3 +15,7 @@ Date:   Tue Apr 22 17:22:49 2025 +0100
 
 Based on my own impression, commit ac53f11917ad4f7798138c3000baa9ec7c132f52 is the workable version of 'real-time' tracklet-merge, which refers to 2018 paper. 
 Now(31/07/2025), I am working on another version of MCVT framework.
+
+On (12/08/2025), I am working on this package again on branch main, the aim is achieve the final MCVT:
+ Workpage 1: Local SCT rematch
+ Workpage 2: MCVT (Greedy Match)
