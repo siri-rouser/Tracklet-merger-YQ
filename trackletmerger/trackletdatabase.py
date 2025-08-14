@@ -3,7 +3,6 @@ import logging
 import cv2
 import json
 from visionapi_yq.messages_pb2 import SaeMessage,TrackletsByCamera,Tracklet,Trajectory, Detection, BoundingBox
-from visionlib.pipeline.tools import get_raw_frame_data
 
 class Trackletdatabase:
     '''Keeps Trajectory() messages'''

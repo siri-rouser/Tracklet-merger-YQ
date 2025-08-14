@@ -1,4 +1,5 @@
-from typing import List
+from typing import List, Tuple, Dict
+from pathlib import Path
 
 from pydantic import BaseModel, Field, conlist
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -13,6 +14,9 @@ class RedisConfig(BaseModel):
     input_stream_prefix: str = 'objecttracker'
     output_stream_prefix: str = 'tracklet-merger'
 
+
+Size2D = Tuple[Annotated[int, Field(gt=0)], Annotated[int, Field(gt=0)]]
+
 class MergingConfig(BaseModel):
     input_stream_ids: conlist(str)
     output_stream_id: str
@@ -21,17 +25,23 @@ class MergingConfig(BaseModel):
     dis_remove: float
     dis_alpha: float
     dis_beta: float
-    lost_time_ms: int
-    searching_time_ms: int
-    pre_defined_zones: conlist(str)
+    lost_time: int
+    searching_time: int
+    original_img_size: Dict[str, Size2D] = Field(default_factory=dict)
+    zone_data: Dict[str, Path] = Field(default_factory=dict)
+
+class SCTMergingConfig(BaseModel):
+    max_frame_gap: int = 100
+    max_pixel_distance: int = 500
+    cosine_threshold: float = 0.1
 
 class TrackletMergerConfig(BaseSettings):
     log_level: LogLevel = LogLevel.WARNING
     redis: RedisConfig = RedisConfig()
     prometheus_port: Annotated[int, Field(ge=1024, le=65536)] = 8000
     merging_config: MergingConfig
+    sct_merging_config: SCTMergingConfig = SCTMergingConfig()
     save_path: str = 'merged_results.txt'
-
 
     model_config = SettingsConfigDict(env_nested_delimiter='__')
 
