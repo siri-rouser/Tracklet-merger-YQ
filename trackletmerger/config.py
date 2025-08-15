@@ -29,10 +29,13 @@ class MergingConfig(BaseModel):
     searching_time: int
     original_img_size: Dict[str, Size2D] = Field(default_factory=dict)
     zone_data: Dict[str, Path] = Field(default_factory=dict)
+    is_clm: bool = True  # Whether to use camera link model for cross-camera matching
     clm_path: Path = Path('cam_pair.json')
     clm_bandwidth: float = 5.0 
+    kde_threshold: float = 5e-4  # Threshold for kernel density estimation
     frame_window: int = 2000  # in frames
     overlap_frames: int = 1000  # in frames
+    camera_pairs: List[Tuple[str, str]] = Field(default_factory=list)  # List of tuples (stream1, stream2)
 
 class SCTMergingConfig(BaseModel):
     max_frame_gap: int = 100
