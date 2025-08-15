@@ -56,8 +56,10 @@ class TrackletMerger:
 
         # push completed scttracklets into MCTTrackbase
         tracklets_dict = self.sct_trackbase.push_completed_tracklets(stream_id)
+        self.mct_trackbase.append(tracklets_dict, stream_id)
 
         # Greedy match from unmatched tracklets in MCTTrackbase (if there are any new tracklets in MCTTrackbase)
+        self.mct_trackbase.process(stream_id)
 
         # Save the matched results, prune the tracklets in MCTTrackbase
             

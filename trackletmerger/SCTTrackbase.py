@@ -61,6 +61,7 @@ class SCTTrackbase:
             exit_point: Dict[str, Tuple[float, float]] = {}
             start_feat: Dict[str, Optional[np.ndarray]] = {}
             end_feat: Dict[str, Optional[np.ndarray]] = {}
+            mean_feat: Dict[str, Optional[np.ndarray]] = {}
 
             for track_id in candidate_ids:
                 current_tracklet = self.data.cameras[stream_id].tracklets[track_id]
@@ -74,10 +75,9 @@ class SCTTrackbase:
                 exit_point[track_id] = self._center_abs(last_det, stream_id)
 
                 # Features near start/end used for cosine distance
-                # sfeat, _ = self._feature_near_start(current_tracklet)
-                # efeat, _ = self._feature_near_end(current_tracklet)
-                sfeat = current_tracklet.mean_feature
-                efeat = current_tracklet.mean_feature
+                sfeat, _ = self._feature_near_start(current_tracklet)
+                efeat, _ = self._feature_near_end(current_tracklet)
+                mean_feat[track_id] = current_tracklet.mean_feature
                 start_feat[track_id] = sfeat
                 end_feat[track_id] = efeat
 
@@ -103,11 +103,13 @@ class SCTTrackbase:
                     # feature availability
                     fa = end_feat.get(ida)
                     fb = start_feat.get(idb)
+                    mfa = mean_feat.get(ida)
+                    mfb = mean_feat.get(idb)
                     if fa is None or fb is None:
                         self.logger.debug(f"[SCT merge] stream={stream_id} {ida} -> {idb} | features not available, skipping")
                         continue
-                    self.logger.info(f"[SCT merge] stream={stream_id} {ida} -> {idb} | features cosine distance={self._cosine_distance(fa, fb):.4f}")
-                    cost = self._cosine_distance(fa, fb)
+                    cost = min(self._cosine_distance(fa, fb),self._cosine_distance(mfa, mfb))
+                    self.logger.info(f"[SCT merge] stream={stream_id} {ida} -> {idb} | features cosine distance={cost:.4f}")
                     if np.isfinite(cost) and cost < self.config.sct_merging_config.cosine_threshold:
                         candidates.append((float(cost), ida, idb))
 
@@ -156,7 +158,7 @@ class SCTTrackbase:
 
     def push_completed_tracklets(self, stream_id: str) -> Dict[str,Tracklet]:
         # Push completed tracklets to the MCTTrackbase and remove them from SCTTrackbase
-        completed_tracklets = {}
+        completed_tracklets:Dict[str,Tracklet] = {}
         removed_tracklets = []
         if stream_id not in self.data.cameras:
             self.logger.warning(f"No tracklets found for stream {stream_id}.")
@@ -187,21 +189,21 @@ class SCTTrackbase:
         cy = 0.5 * (bb.min_y + bb.max_y) * H
         return (float(cx), float(cy))
 
-    # def _feature_near_start(self, tracklet: Tracklet) -> Tuple[Optional[np.ndarray], Optional[object]]:
-    #     """Earliest detection that has 'feature' populated."""
-    #     dets = sorted(tracklet.detections_info, key=lambda d: d.frame_id)
-    #     for d in dets:
-    #         if hasattr(d, "feature") and len(d.feature) > 0:
-    #             return np.asarray(list(d.feature), dtype=np.float32), d
-    #     return None, None
+    def _feature_near_start(self, tracklet: Tracklet) -> Tuple[Optional[np.ndarray], Optional[object]]:
+        """Earliest detection that has 'feature' populated."""
+        dets = sorted(tracklet.detections_info, key=lambda d: d.frame_id)
+        for d in dets:
+            if hasattr(d, "feature") and len(d.feature) > 0:
+                return np.asarray(list(d.feature), dtype=np.float32), d
+        return None, None
 
-    # def _feature_near_end(self, tracklet: Tracklet) -> Tuple[Optional[np.ndarray], Optional[object]]:
-    #     """Latest detection that has 'feature' populated."""
-    #     dets = sorted(tracklet.detections_info, key=lambda d: d.frame_id, reverse=True)
-    #     for d in dets:
-    #         if hasattr(d, "feature") and len(d.feature) > 0:
-    #             return np.asarray(list(d.feature), dtype=np.float32), d
-    #     return None, None
+    def _feature_near_end(self, tracklet: Tracklet) -> Tuple[Optional[np.ndarray], Optional[object]]:
+        """Latest detection that has 'feature' populated."""
+        dets = sorted(tracklet.detections_info, key=lambda d: d.frame_id, reverse=True)
+        for d in dets:
+            if hasattr(d, "feature") and len(d.feature) > 0:
+                return np.asarray(list(d.feature), dtype=np.float32), d
+        return None, None
 
     @staticmethod
     def _cosine_distance(a, b) -> float:

@@ -29,6 +29,10 @@ class MergingConfig(BaseModel):
     searching_time: int
     original_img_size: Dict[str, Size2D] = Field(default_factory=dict)
     zone_data: Dict[str, Path] = Field(default_factory=dict)
+    clm_path: Path = Path('cam_pair.json')
+    clm_bandwidth: float = 5.0 
+    frame_window: int = 2000  # in frames
+    overlap_frames: int = 1000  # in frames
 
 class SCTMergingConfig(BaseModel):
     max_frame_gap: int = 100
@@ -41,7 +45,7 @@ class TrackletMergerConfig(BaseSettings):
     prometheus_port: Annotated[int, Field(ge=1024, le=65536)] = 8000
     merging_config: MergingConfig
     sct_merging_config: SCTMergingConfig = SCTMergingConfig()
-    save_path: str = 'merged_results.txt'
+    save_directory: Path = Path('./results')
 
     model_config = SettingsConfigDict(env_nested_delimiter='__')
 
