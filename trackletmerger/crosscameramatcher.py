@@ -1,10 +1,10 @@
 import json
 import numpy as np
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 from sklearn.neighbors import KernelDensity
 import logging
 from .config import TrackletMergerConfig
-from matching_tool import CostMatrix, ReIDCalculator
+from .matching_tool import CostMatrix, ReIDCalculator
 from visionapi_yq.messages_pb2 import SaeMessage,TrackletsByCamera,Tracklet,Trajectory,TrackletStatus,ZoneStatus
 
 class CrossCameraMatcher:
@@ -18,6 +18,11 @@ class CrossCameraMatcher:
             self.clm = None
 
     def match(self, candidate_tracklets: Dict[str, List[Tuple[str, Tracklet]]], start_frame: int, end_frame: int):
+
+        if not hasattr(self, 'global_reid_dict'):
+            self.global_reid_dict = {}
+            self.global_id_counter = 0
+            self.tracklet_to_global_id = {}
 
         for cam_a, cam_b in self.camera_pairs:
             # NOTE: in here, e.g. cam_a=stream1, cam_b=stream2
@@ -39,12 +44,16 @@ class CrossCameraMatcher:
             reid_cal = ReIDCalculator(self.logger,dis_thre=self.config.merging_config.dis_thre, dis_remove=self.config.merging_config.dis_remove,
                                        dis_alpha=self.config.merging_config.dis_alpha,dis_beta=self.config.merging_config.dis_beta,kde_threshold=self.config.merging_config.kde_threshold,clm=self.clm)
             if dismat.size > 0:
-                reid_dict,rm_dict = reid_cal.calc(dismat,q_track_ids,q_cam_ids, g_track_ids, g_cam_ids, q_times, g_times, q_entry_zn, q_exit_zn, g_enrty_zn, g_exit_zn,CLM=self.clm)
-                self.logger.info(reid_dict)
-                return reid_dict
+                reid_dict,rm_dict = reid_cal.calc(dismat,q_track_ids,q_cam_ids, g_track_ids, g_cam_ids, q_times, g_times, q_entry_zn, q_exit_zn, g_enrty_zn, g_exit_zn)
+                self.logger.info(f"Camera pair {cam_a}-{cam_b} reid_dict: {reid_dict}")
+
+                self.global_reid_dict = self.merge_reid_dict(reid_dict, (cam_a, cam_b))
             else:
                 self.logger.info('dismat is empty')
-                return None
+
+        # Return the unified global reid dict
+        self.logger.info(f"Final global reid dict: {self.global_reid_dict}")
+        return self.global_reid_dict
 
     def _CLM_setup(self):
         '''
@@ -86,3 +95,138 @@ class CrossCameraMatcher:
                 self.clm[key_str]['entry_exit_pair'] = entry_exit_pair
         
         self.logger.info(f"CLM setup complete with {len(self.clm)} camera pairs.")
+
+    def merge_reid_dict(self, new_reid_dict: Dict[str, Dict[str, Dict]], camera_pair: Tuple[str, str]) -> Dict[str, Dict[str, Dict]]:
+        """
+        Merge new reid_dict results with existing global reid_dict to maintain unified tracking IDs.
+        
+        Args:
+            new_reid_dict: Reid results from current camera pair matching
+            camera_pair: Current camera pair being processed (cam_a, cam_b)
+        
+        Returns:
+            Updated unified reid_dict with consistent global IDs
+        
+        Example:
+            {"cam01": {
+                "13": {
+                "global_id": 1,
+                "local_matches": [{"matched_camera": "cam02", "matched_track_id": "67", "distance": 0.3}]
+                }
+            },
+            "cam02": {
+                "67": {
+                "global_id": 1, 
+                "local_matches": [{"matched_camera": "cam01", "matched_track_id": "13", "distance": 0.3},
+                                {"matched_camera": "cam03", "matched_track_id": "122", "distance": 0.4}]
+                }
+            }
+            }
+        """
+        if not hasattr(self, 'global_reid_dict'):
+            self.global_reid_dict = {}
+            self.global_id_counter = 0
+            self.tracklet_to_global_id = {}  # Maps (cam_id, track_id) -> global_id
+        
+        if not new_reid_dict:
+            return self.global_reid_dict
+        
+        cam_a, cam_b = camera_pair
+        
+        # Extract matches from the new reid_dict
+        matches = []  # List of (cam_id, track_id, matched_cam_id, matched_track_id, distance)
+        
+        for cam_id, track_matches in new_reid_dict.items():
+            for track_id, match_info in track_matches.items():
+                matched_track_id = match_info.get("id", -1)
+                distance = match_info.get("dis", float('inf'))
+                
+                if matched_track_id != -1 and distance != float('inf'):
+                    # Determine which camera the matched tracklet belongs to
+                    matched_cam_id = cam_b if cam_id == cam_a else cam_a
+                    matches.append((cam_id, track_id, matched_cam_id, str(matched_track_id), distance))
+        
+        # Process each match to assign global IDs
+        for cam_id, track_id, matched_cam_id, matched_track_id, distance in matches:
+            tracklet_key = (cam_id, track_id)
+            matched_tracklet_key = (matched_cam_id, matched_track_id)
+            
+            current_global_id = self.tracklet_to_global_id.get(tracklet_key)
+            matched_global_id = self.tracklet_to_global_id.get(matched_tracklet_key)
+            
+            if current_global_id is None and matched_global_id is None:
+                # Both tracklets are new, assign new global ID
+                new_global_id = self._get_next_global_id()
+                self.tracklet_to_global_id[tracklet_key] = new_global_id
+                self.tracklet_to_global_id[matched_tracklet_key] = new_global_id
+                self.logger.info(f"New global ID {new_global_id}: {cam_id}:{track_id} <-> {matched_cam_id}:{matched_track_id}")
+                
+            elif current_global_id is not None and matched_global_id is None:
+                # Current tracklet has global ID, assign same to matched tracklet
+                self.tracklet_to_global_id[matched_tracklet_key] = current_global_id
+                self.logger.info(f"Extend global ID {current_global_id}: {matched_cam_id}:{matched_track_id} joins {cam_id}:{track_id}")
+                
+            elif current_global_id is None and matched_global_id is not None:
+                # Matched tracklet has global ID, assign same to current tracklet
+                self.tracklet_to_global_id[tracklet_key] = matched_global_id
+                self.logger.info(f"Extend global ID {matched_global_id}: {cam_id}:{track_id} joins {matched_cam_id}:{matched_track_id}")
+                
+            elif current_global_id != matched_global_id:
+                # Both have different global IDs, need to merge them
+                # Keep the smaller ID and update all tracklets with the larger ID
+                keep_id = min(current_global_id, matched_global_id)
+                merge_id = max(current_global_id, matched_global_id)
+                
+                # Update all tracklets that had the merge_id to use keep_id
+                for (c, t), g_id in list(self.tracklet_to_global_id.items()):
+                    if g_id == merge_id:
+                        self.tracklet_to_global_id[(c, t)] = keep_id
+                
+                self.logger.info(f"Merged global IDs: {merge_id} -> {keep_id} for {cam_id}:{track_id} <-> {matched_cam_id}:{matched_track_id}")
+            
+            # If both already have the same global ID, no action needed
+        
+        # Rebuild global_reid_dict from tracklet_to_global_id mapping
+        self.global_reid_dict = {}
+        for (cam_id, track_id), global_id in self.tracklet_to_global_id.items():
+            if cam_id not in self.global_reid_dict:
+                self.global_reid_dict[cam_id] = {}
+            
+            self.global_reid_dict[cam_id][track_id] = {
+                "global_id": global_id,
+                "local_matches": []  # Will be populated with match details
+            }
+        
+        # Add match details to the global reid dict
+        for cam_id, track_id, matched_cam_id, matched_track_id, distance in matches:
+            if cam_id in self.global_reid_dict and track_id in self.global_reid_dict[cam_id]:
+                match_detail = {
+                    "matched_camera": matched_cam_id,
+                    "matched_track_id": matched_track_id,
+                    "distance": float(distance),
+                    "camera_pair": camera_pair
+                }
+                self.global_reid_dict[cam_id][track_id]["local_matches"].append(match_detail)
+        
+        return self.global_reid_dict
+
+    def _get_next_global_id(self) -> int:
+        """Get the next available global ID."""
+        self.global_id_counter += 1
+        return self.global_id_counter
+
+    def get_global_id_for_tracklet(self, cam_id: str, track_id: str) -> Optional[int]:
+        """Get the global ID for a specific tracklet."""
+        return self.tracklet_to_global_id.get((cam_id, track_id))
+
+    def get_tracklets_with_global_id(self, global_id: int) -> List[Tuple[str, str]]:
+        """Get all tracklets that share the same global ID."""
+        return [(cam_id, track_id) for (cam_id, track_id), g_id in self.tracklet_to_global_id.items() 
+                if g_id == global_id]
+
+    def reset_global_tracking(self):
+        """Reset global tracking state (useful for testing or restarting)."""
+        self.global_reid_dict = {}
+        self.global_id_counter = 0
+        self.tracklet_to_global_id = {}
+        self.logger.info("Reset global tracking state")

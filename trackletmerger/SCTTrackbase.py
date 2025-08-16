@@ -291,10 +291,13 @@ class SCTTrackbase:
                 self.logger.error(f"Zone data file {zone_path} does not exist.")
                 continue
             
-            with open(zone_path, 'r') as f:
-                zone_info = json.load(f)
-                self.zone_data[stream_id] = zone_info
-                self.logger.info(f"Loaded zone data for {stream_id} from {zone_path}")
+            try:
+                with open(zone_path, 'r') as f:
+                    zone_info = json.load(f)
+                    self.zone_data[stream_id] = zone_info
+                    self.logger.info(f"Loaded zone data for {stream_id} from {zone_path}")
+            except (json.JSONDecodeError, IOError) as e:
+                self.logger.error(f"Failed to load zone data from {zone_path}: {e}")
     
     def _get_entry_exit_zones(self, tracklet: Tracklet, stream_id: str):
         # Get entry and exit zones for the tracklet based on the zone data

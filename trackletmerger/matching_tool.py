@@ -21,7 +21,7 @@ class CostMatrix:
 
     def cost_matrix(self,metric):
         q_feats, q_track_ids, q_cam_ids, q_times, q_entry_zn, q_exit_zn = self._extract_tracklet_data(self.query_tracklet, cam_id = self.cam1)
-        g_feats, g_track_ids, g_cam_ids, g_times, g_enrty_zn, g_exit_zn = self._extract_tracklet_data(self.gallery_tracklet, cam_id = self.cam2)
+        g_feats, g_track_ids, g_cam_ids, g_times, g_entry_zn, g_exit_zn = self._extract_tracklet_data(self.gallery_tracklet, cam_id = self.cam2)
         
         if q_feats is None or g_feats is None or q_feats.size(0) == 0 or g_feats.size(0) == 0:
             distmat = []
@@ -37,7 +37,7 @@ class CostMatrix:
         g_times = np.asarray(g_times)
 
         # zone is a int variable
-        return distmat, q_track_ids, q_cam_ids, g_track_ids, g_cam_ids, q_times, g_times, q_entry_zn, q_exit_zn, g_enrty_zn, g_exit_zn 
+        return distmat, q_track_ids, q_cam_ids, g_track_ids, g_cam_ids, q_times, g_times, q_entry_zn, q_exit_zn, g_entry_zn, g_exit_zn 
     
     def euclidean_distance(self, q_feats, g_feats):
         m, n = q_feats.size(0), g_feats.size(0)
@@ -149,7 +149,7 @@ class ReIDCalculator:
                 
         return np.array(zone_remove)
 
-    def calc(self, dismat,q_track_ids,q_cam_ids, g_track_ids, g_cam_ids, q_times, g_times, q_entry_zn, q_exit_zn, g_enrty_zn, g_exit_zn):
+    def calc(self, dismat,q_track_ids,q_cam_ids, g_track_ids, g_cam_ids, q_times, g_times, q_entry_zn, q_exit_zn, g_entry_zn, g_exit_zn):
         '''
         dismat: distance matrix
         q_track_ids: query tracklet ids
@@ -167,13 +167,13 @@ class ReIDCalculator:
             q_time = q_times[index]
             order = indices[index]
 
-            if self.clm is not None:
+            if self.clm is None:
                 # directly solve the cost-matrix
                 self.logger.warning(f"Camera link model not found")
                 remove = (g_cam_ids[order] == q_cam_id) | (dismat[index][order] > self.dis_thre) 
             else:
                 directions,dismat = self._kde_filter(dismat, index, order, q_time, g_times,q_cam_id, g_cam_ids)
-                zone_remove = self._zone_remove(q_entry_zn[index], q_exit_zn[index], g_enrty_zn, g_exit_zn,q_cam_id, g_cam_ids,order,directions)
+                zone_remove = self._zone_remove(q_entry_zn[index], q_exit_zn[index], g_entry_zn, g_exit_zn,q_cam_id, g_cam_ids,order,directions)
 
                 remove = (g_cam_ids[order] == q_cam_id) | \
                         (dismat[index][order] > self.dis_thre) | \
