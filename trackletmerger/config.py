@@ -39,7 +39,7 @@ class MergingConfig(BaseModel):
 
 class SCTMergingConfig(BaseModel):
     max_frame_gap: int = 100
-    max_pixel_distance: int = 500
+    max_pixel_distance_ratio: float = 0.25
     cosine_threshold: float = 0.1
 
 class TrackletMergerConfig(BaseSettings):
@@ -49,6 +49,7 @@ class TrackletMergerConfig(BaseSettings):
     merging_config: MergingConfig
     sct_merging_config: SCTMergingConfig = SCTMergingConfig()
     save_directory: Path = Path('./results')
+    refresh_interval: int = 10000  # in milliseconds, default is 10 seconds
 
     model_config = SettingsConfigDict(env_nested_delimiter='__')
 

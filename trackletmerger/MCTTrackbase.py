@@ -29,17 +29,18 @@ class MCTTrackbase:
         Append a new SaeMessage to the tracklet database.
         """
         if stream_id not in self.data.cameras:
-            self.data.cameras[stream_id] = TrackletsByCamera()
+            self.data.cameras[stream_id].CopyFrom(TrackletsByCamera())
 
         for track_id,tracklet in tracklets_dict.items():
             if track_id not in self.data.cameras[stream_id].tracklets:
-                self.data.cameras[stream_id].tracklets[track_id] = tracklet
+                self.data.cameras[stream_id].tracklets[track_id].CopyFrom(tracklet)
             else:
                 self.logger.warning(f"Tracklet {track_id} already exists in stream {stream_id}. Skipping append.")
 
-    def process(self, stream_id: str):
+    def process(self):
         # Process every 500-1000 frames, but with overlap
         current_frame = self._get_current_max_frame()
+        self.logger.info(f"Current max frame: {current_frame}, Last processed frame: {self.last_processed_frame} -------------------------")
         
         if current_frame - self.last_processed_frame >= self.config.merging_config.frame_window:
             # Process tracklets from (last_processed_frame - overlap) to current_frame
@@ -56,7 +57,7 @@ class MCTTrackbase:
 
             reid_dict = self.matcher.match(candidate_tracklets, start_frame, end_frame) # NOTE: test if it works, make this parallel
 
-            self.matcher.reset_global_tracking()
+            # self.matcher.reset_global_tracking()
 
             # NOTE: next workpackageSave results 
             if reid_dict:
@@ -94,7 +95,7 @@ class MCTTrackbase:
 
     def _process_results(
         self,
-        reid_dict: Dict[str, Dict[str, Dict]],
+        reid_dict: Dict[int, Dict[int, Dict]],
         candidate_tracklets: Dict[str, List[Tuple[str, Tracklet]]],
         start_frame: int,
         end_frame: int,
@@ -118,11 +119,11 @@ class MCTTrackbase:
 
         # Build O(1) lookup: cam_id -> {track_id: Tracklet}
         tracklet_index: Dict[str, Dict[str, Tracklet]] = {}
-        for cam_id, pairs in candidate_tracklets.items():
+        for cam_id, pairs in candidate_tracklets.items(): # Cam ID is string in here.
             idx = {}
             for tid, trk in pairs:
-                idx[tid] = trk
-            tracklet_index[cam_id] = idx
+                idx[int(tid)] = trk # tid is string, trk is Tracklet
+            tracklet_index[int(cam_id.replace('stream',''))] = idx # make str to int
 
         # Ensure output directory exists
         self.results_file.parent.mkdir(parents=True, exist_ok=True)
@@ -130,14 +131,16 @@ class MCTTrackbase:
         wrote = 0
         with open(self.results_file, "a", encoding="utf-8") as f:
             for cam_id, track_matches in reid_dict.items():
+                cam_id = int(cam_id)  
                 # Resolve original image size once per camera
                 try:
                     W, H = self.config.merging_config.original_img_size[f"stream{cam_id}"]
                 except Exception:
                     # Fallback to a safe default (adjust if you prefer to raise)
-                    W, H = 1920, 1080
+                    W, H = 2560, 1440
 
                 for track_id, match_info in track_matches.items():
+                    track_id = int(track_id)  # Ensure track_id is an integer
                     global_id = match_info.get("global_id")
                     if global_id is None:
                         continue
@@ -166,16 +169,16 @@ class MCTTrackbase:
                                 lon = float(getattr(gc, "longitude", -1.0))
 
                         detections.append({
-                            "bbox": [bbox.min_x * W, bbox.min_y * H, bbox.max_x * W, bbox.max_y * H],
+                            "bbox": [float(bbox.min_x * W), float(bbox.min_y * H), float(bbox.max_x * W), float(bbox.max_y * H)],
                             "frame_id": int(det.frame_id),
                             "geo_coordinate": [lat, lon],
                         })
 
                     record = {
-                        "processing_window": {"start_frame": start_frame, "end_frame": end_frame},
+                        "processing_window": {"start_frame": int(start_frame), "end_frame": int(end_frame)},
                         "cam_id": cam_id,
                         "ori_id": track_id,
-                        "new_global_id": global_id,
+                        "new_global_id": int(global_id),
                         "detections": detections,
                     }
 
