@@ -1,6 +1,7 @@
 import numpy as np
 import logging
 import cv2
+import math
 import time
 import json
 from math import sqrt
@@ -16,6 +17,10 @@ class SCTTrackbase:
         self.config = config
         self._zone_data_setup()
         self._process_flag = False
+        self.sct_search_distance = {} 
+        for stream_id in config.merging_config.original_img_size:
+            self.sct_search_distance[stream_id] = \
+                config.sct_merging_config.max_pixel_distance_ratio * config.merging_config.original_img_size[stream_id][0] 
 
     def append(self, sae_msg: SaeMessage, stream_id: str):
         # Initialize the trajectory data
@@ -83,7 +88,7 @@ class SCTTrackbase:
 
             # Build candidate pairs with costs
             candidates: List[Tuple[float, str, str]] = []  # (cost, prev_id, next_id)
-            self.logger.warning(f"[SCT merge] stream={stream_id} candidate_ids={candidate_ids}")
+            self.logger.info(f"[SCT merge] stream={stream_id} candidate_ids={candidate_ids}")
             for ida in candidate_ids:
                 for idb in candidate_ids:
                     if ida == idb:
@@ -93,12 +98,12 @@ class SCTTrackbase:
                         continue
                     # temporal gap constraint
                     frame_gap = start_frame[idb] - end_frame[ida]
-                    print(f"[SCT merge] stream={stream_id} {ida} -> {idb} | frame_gap={frame_gap}")
+                    self.logger.debug(f"[SCT merge] stream={stream_id} {ida} -> {idb} | frame_gap={frame_gap}")
                     if frame_gap > self.config.sct_merging_config.max_frame_gap:
                         continue
                     # spatial proximity constraint
-                    print(f"[SCT merge] stream={stream_id} {ida} -> {idb} | ecuclidean={self._euclidean(exit_point[ida], entry_point[idb]):.4f}")
-                    if (self._euclidean(exit_point[ida], entry_point[idb]) > self.config.sct_merging_config.max_pixel_distance):
+                    self.logger.debug(f"[SCT merge] stream={stream_id} {ida} -> {idb} | ecuclidean={self._euclidean(exit_point[ida], entry_point[idb]):.4f}")
+                    if (self._euclidean(exit_point[ida], entry_point[idb]) > self.sct_search_distance[stream_id]):
                         continue
                     # feature availability
                     fa = end_feat.get(ida)
@@ -109,7 +114,7 @@ class SCTTrackbase:
                         self.logger.debug(f"[SCT merge] stream={stream_id} {ida} -> {idb} | features not available, skipping")
                         continue
                     cost = min(self._cosine_distance(fa, fb),self._cosine_distance(mfa, mfb))
-                    self.logger.info(f"[SCT merge] stream={stream_id} {ida} -> {idb} | features cosine distance={cost:.4f}")
+                    self.logger.debug(f"[SCT merge] stream={stream_id} {ida} -> {idb} | features cosine distance={cost:.4f}")
                     if np.isfinite(cost) and cost < self.config.sct_merging_config.cosine_threshold:
                         candidates.append((float(cost), ida, idb))
 
@@ -254,7 +259,7 @@ class SCTTrackbase:
         sf, ef = self._get_frame_ids(t1)
         t1.start_frame = int(sf)
         t1.end_frame = int(ef)
-        t1.status = TrackletStatus.SEARCHING  # Reset status to ACTIVE after merging
+        t1.status = TrackletStatus.SEARCHING
 
         # Recompute zone info and status for the merged tracklet
         entry_zone_id, exit_zone_id, entry_zone_cls, exit_zone_cls = self._get_entry_exit_zones(t1, stream_id)
@@ -322,9 +327,11 @@ class SCTTrackbase:
         exit_point  = bbox_center_xyxy(exit_det.bounding_box)
 
         def _is_point_in_bbox(point, bbox):
+            # NOTE: changed to use 20 pixels margin for entry/exit detection
+            margin = 20
             x, y = point
             x1, y1, x2, y2 = bbox
-            return x1 <= x <= x2 and y1 <= y <= y2
+            return min(x1-margin,0) <= x <= max(x2+margin,2560) and min(y1-margin,0) <= y <= max(y2+margin,1440)
 
         for zone in self.zone_data[stream_id].values():
             if _is_point_in_bbox(entry_point,zone['rect_area']):

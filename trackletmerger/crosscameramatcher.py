@@ -18,6 +18,19 @@ class CrossCameraMatcher:
             self.clm = None
 
     def match(self, candidate_tracklets: Dict[str, List[Tuple[str, Tracklet]]], start_frame: int, end_frame: int):
+        '''
+        The reid_dict is a dictionary that contains the reid results for each camera pair.
+        The structure is as follows:
+        {
+            int(cam_id): {
+                int(track_id): {
+                    "global_id": 1,
+                    "local_matches": [{"matched_camera": int(cam_id), "matched_track_id": int(track_id), "distance": float(dis)}]
+                }
+            },
+
+        '''
+
 
         if not hasattr(self, 'global_reid_dict'):
             self.global_reid_dict = {}
@@ -44,16 +57,18 @@ class CrossCameraMatcher:
             reid_cal = ReIDCalculator(self.logger,dis_thre=self.config.merging_config.dis_thre, dis_remove=self.config.merging_config.dis_remove,
                                        dis_alpha=self.config.merging_config.dis_alpha,dis_beta=self.config.merging_config.dis_beta,kde_threshold=self.config.merging_config.kde_threshold,clm=self.clm)
             if dismat.size > 0:
-                reid_dict,rm_dict = reid_cal.calc(dismat,q_track_ids,q_cam_ids, g_track_ids, g_cam_ids, q_times, g_times, q_entry_zn, q_exit_zn, g_enrty_zn, g_exit_zn)
-                self.logger.info(f"Camera pair {cam_a}-{cam_b} reid_dict: {reid_dict}")
+                matches,rm_dict = reid_cal.calc(dismat,q_track_ids,q_cam_ids, g_track_ids, g_cam_ids, q_times, g_times, q_entry_zn, q_exit_zn, g_enrty_zn, g_exit_zn)
+                self.logger.info(f"Camera pair {cam_a}-{cam_b} reid_dict: {matches}")
 
-                self.global_reid_dict = self.merge_reid_dict(reid_dict, (cam_a, cam_b))
+                self.global_reid_dict = self.merge_reid_dict(matches, (cam_a, cam_b))
             else:
                 self.logger.info('dismat is empty')
 
         # Return the unified global reid dict
-        self.logger.info(f"Final global reid dict: {self.global_reid_dict}")
+        self.logger.info(f"Final global reid dict:")
+        self.logger.info(self.global_reid_dict)
         return self.global_reid_dict
+        
 
     def _CLM_setup(self):
         '''
@@ -96,7 +111,7 @@ class CrossCameraMatcher:
         
         self.logger.info(f"CLM setup complete with {len(self.clm)} camera pairs.")
 
-    def merge_reid_dict(self, new_reid_dict: Dict[str, Dict[str, Dict]], camera_pair: Tuple[str, str]) -> Dict[str, Dict[str, Dict]]:
+    def merge_reid_dict(self, matches:List, camera_pair: Tuple[str, str]) -> Dict[str, Dict[str, Dict]]:
         """
         Merge new reid_dict results with existing global reid_dict to maintain unified tracking IDs.
         
@@ -107,48 +122,21 @@ class CrossCameraMatcher:
         Returns:
             Updated unified reid_dict with consistent global IDs
         
-        Example:
-            {"cam01": {
-                "13": {
-                "global_id": 1,
-                "local_matches": [{"matched_camera": "cam02", "matched_track_id": "67", "distance": 0.3}]
-                }
-            },
-            "cam02": {
-                "67": {
-                "global_id": 1, 
-                "local_matches": [{"matched_camera": "cam01", "matched_track_id": "13", "distance": 0.3},
-                                {"matched_camera": "cam03", "matched_track_id": "122", "distance": 0.4}]
-                }
-            }
-            }
         """
         if not hasattr(self, 'global_reid_dict'):
             self.global_reid_dict = {}
             self.global_id_counter = 0
             self.tracklet_to_global_id = {}  # Maps (cam_id, track_id) -> global_id
         
-        if not new_reid_dict:
+        if not matches:
             return self.global_reid_dict
         
         cam_a, cam_b = camera_pair
         
-        # Extract matches from the new reid_dict
-        matches = []  # List of (cam_id, track_id, matched_cam_id, matched_track_id, distance)
-        
-        for cam_id, track_matches in new_reid_dict.items():
-            for track_id, match_info in track_matches.items():
-                matched_track_id = match_info.get("id", -1)
-                distance = match_info.get("dis", float('inf'))
-                
-                if matched_track_id != -1 and distance != float('inf'):
-                    # Determine which camera the matched tracklet belongs to
-                    matched_cam_id = cam_b if cam_id == cam_a else cam_a
-                    matches.append((cam_id, track_id, matched_cam_id, str(matched_track_id), distance))
         
         # Process each match to assign global IDs
         for cam_id, track_id, matched_cam_id, matched_track_id, distance in matches:
-            tracklet_key = (cam_id, track_id)
+            tracklet_key = (cam_id, track_id) 
             matched_tracklet_key = (matched_cam_id, matched_track_id)
             
             current_global_id = self.tracklet_to_global_id.get(tracklet_key)
@@ -159,17 +147,17 @@ class CrossCameraMatcher:
                 new_global_id = self._get_next_global_id()
                 self.tracklet_to_global_id[tracklet_key] = new_global_id
                 self.tracklet_to_global_id[matched_tracklet_key] = new_global_id
-                self.logger.info(f"New global ID {new_global_id}: {cam_id}:{track_id} <-> {matched_cam_id}:{matched_track_id}")
+                self.logger.info(f"New global ID {new_global_id}: stream{cam_id}:{track_id} <-> stream{matched_cam_id}:{matched_track_id}")
                 
             elif current_global_id is not None and matched_global_id is None:
                 # Current tracklet has global ID, assign same to matched tracklet
                 self.tracklet_to_global_id[matched_tracklet_key] = current_global_id
-                self.logger.info(f"Extend global ID {current_global_id}: {matched_cam_id}:{matched_track_id} joins {cam_id}:{track_id}")
+                self.logger.info(f"Extend global ID {current_global_id}: stream{matched_cam_id}:{matched_track_id} joins stream{cam_id}:{track_id}")
                 
             elif current_global_id is None and matched_global_id is not None:
                 # Matched tracklet has global ID, assign same to current tracklet
                 self.tracklet_to_global_id[tracklet_key] = matched_global_id
-                self.logger.info(f"Extend global ID {matched_global_id}: {cam_id}:{track_id} joins {matched_cam_id}:{matched_track_id}")
+                self.logger.info(f"Extend global ID {matched_global_id}: stream{cam_id}:{track_id} joins stream{matched_cam_id}:{matched_track_id}")
                 
             elif current_global_id != matched_global_id:
                 # Both have different global IDs, need to merge them
@@ -182,7 +170,7 @@ class CrossCameraMatcher:
                     if g_id == merge_id:
                         self.tracklet_to_global_id[(c, t)] = keep_id
                 
-                self.logger.info(f"Merged global IDs: {merge_id} -> {keep_id} for {cam_id}:{track_id} <-> {matched_cam_id}:{matched_track_id}")
+                self.logger.info(f"Merged global IDs: {merge_id} -> {keep_id} for stream{cam_id}:{track_id} <-> stream{matched_cam_id}:{matched_track_id}")
             
             # If both already have the same global ID, no action needed
         

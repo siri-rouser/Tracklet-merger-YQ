@@ -9,7 +9,7 @@ sys.path.append('../')
 from visionapi_yq.messages_pb2 import SaeMessage
 from visionlib.pipeline.tools import get_raw_frame_data
 
-from .config import MergingConfig, LogLevel
+from .config import TrackletMergerConfig, LogLevel
 from .utils import tracklet_match
 from .trackletdatabase import Trackletdatabase
 from .SCTTrackbase import SCTTrackbase
@@ -25,11 +25,12 @@ PROTO_DESERIALIZATION_DURATION = Summary('my_stage_proto_deserialization_duratio
 
 
 class TrackletMerger:
-    def __init__(self, config: MergingConfig, log_level: LogLevel) -> None:
+    def __init__(self, config: TrackletMergerConfig, log_level: LogLevel) -> None:
         self._config = config
         logger.setLevel(log_level.value)
         self.sct_trackbase = SCTTrackbase(logger, config)
         self.mct_trackbase = MCTTrackbase(logger, config)
+        self.last_processed_time = time.time_ns()
 
     def __call__(self, stream_id: str, input_proto: bytes = None) -> Any:
         return self.get(stream_id, input_proto)
@@ -38,15 +39,18 @@ class TrackletMerger:
     def get(self, stream_id:str, input_proto:bytes = None) -> bytes:
         if input_proto is not None:
             sae_msg = self._unpack_proto(input_proto)
-            if len(sae_msg.trajectory.cameras[stream_id].tracklets) == 0:
+            current_time = time.time_ns()
+            if len(sae_msg.trajectory.cameras[stream_id].tracklets) == 0 and (current_time - self.last_processed_time) // 1_000_000 < self._config.refresh_interval:
                 return b''
         else:
             return b''
 
         inference_start = time.monotonic_ns()
+        self.last_processed_time = time.time_ns()
 
         # put new sae_msg into SCTTrackbase
-        self.sct_trackbase.append(sae_msg, stream_id)
+        if len(sae_msg.trajectory.cameras[stream_id].tracklets) > 0:
+            self.sct_trackbase.append(sae_msg, stream_id)
 
         # update status for SCTTrackbase
         self.sct_trackbase.status_update(stream_id)
@@ -56,10 +60,11 @@ class TrackletMerger:
 
         # push completed scttracklets into MCTTrackbase
         tracklets_dict = self.sct_trackbase.push_completed_tracklets(stream_id)
+
         self.mct_trackbase.append(tracklets_dict, stream_id)
 
         # Greedy match from unmatched tracklets in MCTTrackbase (if there are any new tracklets in MCTTrackbase)
-        self.mct_trackbase.process(stream_id)
+        self.mct_trackbase.process()
 
         # Save the matched results, prune the tracklets in MCTTrackbase
             
@@ -82,6 +87,3 @@ class TrackletMerger:
     @PROTO_SERIALIZATION_DURATION.time()
     def _create_output(self, stream_id, inference_time_us, input_sae_msg:SaeMessage):
         out_sae_msg = SaeMessage()
-    
-    def get_results(self):
-        return self._trackletdatabase.matched_dict, self.image_size, self._trackletdatabase.mini_time
