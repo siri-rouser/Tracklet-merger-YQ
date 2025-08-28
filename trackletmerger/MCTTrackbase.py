@@ -1,5 +1,6 @@
 import numpy as np
 import logging
+import threading
 import cv2
 from math import sqrt
 from pathlib import Path
@@ -23,74 +24,98 @@ class MCTTrackbase:
         self.frame_window = config.merging_config.frame_window  # e.g., 1000
         self.overlap_frames = config.merging_config.overlap_frames  # e.g., 200
         self.matcher = CrossCameraMatcher(logger, config)
+        self._state_lock = threading.Lock()   # protects self.data and frame markers
+        self._worker = None                   # background thread handle
 
     def append(self, tracklets_dict:Dict[str,Tracklet], stream_id: str) -> None:
         """
         Append a new SaeMessage to the tracklet database.
         """
-        if stream_id not in self.data.cameras:
-            self.data.cameras[stream_id].CopyFrom(TrackletsByCamera())
+        with self._state_lock:
+            if stream_id not in self.data.cameras:
+                self.data.cameras[stream_id].CopyFrom(TrackletsByCamera())
 
-        for track_id,tracklet in tracklets_dict.items():
-            if track_id not in self.data.cameras[stream_id].tracklets:
-                self.data.cameras[stream_id].tracklets[track_id].CopyFrom(tracklet)
-            else:
-                self.logger.warning(f"Tracklet {track_id} already exists in stream {stream_id}. Skipping append.")
+            for track_id,tracklet in tracklets_dict.items():
+                if track_id not in self.data.cameras[stream_id].tracklets:
+                    self.data.cameras[stream_id].tracklets[track_id].CopyFrom(tracklet)
+                else:
+                    self.logger.warning(f"Tracklet {track_id} already exists in stream {stream_id}. Skipping append.")
 
-    def process(self):
-        # Process every 500-1000 frames, but with overlap
-        current_frame = self._get_current_max_frame()
-        self.logger.info(f"Current max frame: {current_frame}, Last processed frame: {self.last_processed_frame} -------------------------")
-        
-        if current_frame - self.last_processed_frame >= self.config.merging_config.frame_window:
-            # Process tracklets from (last_processed_frame - overlap) to current_frame
-            self.logger.info(f"Starting cross-camera processing at frame {current_frame}")
+    def process_async(self) -> None:
+        """
+        Launch one background processing thread if not already running and if a window is ready.
+        Safe to call on every get(); it will no-op when a worker is active.
+        """
+        # If a worker is already running, do nothing
+        if self._worker and self._worker.is_alive():
+            return
+
+        # Check readiness under the lock (read shared state safely)
+        with self._state_lock:
+            current_frame = self._get_current_max_frame_locked()
+            self.logger.info(f"Current max frame: {current_frame}, Last processed frame: {self.last_processed_frame} -------------------------")
+            ready = (current_frame - self.last_processed_frame) >= self.config.merging_config.frame_window
+
+        if not ready:
+            return
+
+        # Start a daemon worker (dies automatically when main process exits)
+        self._worker = threading.Thread(target=self._process_internal, daemon=True)
+        self._worker.start()
+
+    def _process_internal(self):
+        # 1) Take a snapshot of the necessary state under the lock
+        with self._state_lock:
+            current_frame = self._get_current_max_frame_locked()
             
+            if current_frame - self.last_processed_frame < self.config.merging_config.frame_window:
+                return
+
             start_frame = max(0, self.last_processed_frame)
             end_frame = current_frame
 
-            candidate_tracklets = self._get_tracklets_in_range(start_frame, end_frame)
+            # Snapshot candidate tracklets quickly under lock; release before heavy work
+            candidate_tracklets = self._get_tracklets_in_range_locked(start_frame, end_frame)
 
-            if len(candidate_tracklets) < 2:
-                self.logger.debug("Not enough tracklets for cross-camera matching")
-                return
+        # 2) Heavy work without holding the lock
+        if len(candidate_tracklets) < 2:
+            self.logger.debug("Not enough tracklets for cross-camera matching")
+            return
 
-            reid_dict = self.matcher.match(candidate_tracklets, start_frame, end_frame) # NOTE: test if it works, make this parallel
+        self.logger.info(f"Starting cross-camera processing at frame {current_frame}")
+        reid_dict = self.matcher.match(candidate_tracklets, start_frame, end_frame)
+        self.matcher.reset_global_tracking()
 
-            # self.matcher.reset_global_tracking()
+        if reid_dict:
+            self._process_results(reid_dict, candidate_tracklets, start_frame, end_frame)
+        else:
+            self.logger.info("No matches found in this processing window.")
 
-            # NOTE: next workpackageSave results 
-            if reid_dict:
-                self._process_results(reid_dict, candidate_tracklets, start_frame, end_frame)
-            else:
-                self.logger.info("No matches found in this processing window.")
-
-            # Update processing state
+        # 3) Update frame markers and cleanup under the lock again
+        with self._state_lock:
             self.last_processed_frame = end_frame - self.overlap_frames
+            self._cleanup_old_tracklets(start_frame - self.overlap_frames)
 
-            self.logger.info(f"Completed processing window [{start_frame}, {end_frame}]")
+        self.logger.info(f"Completed processing window [{start_frame}, {end_frame}]")
 
 
-    def _get_current_max_frame(self) -> int:
-        """Get the maximum frame ID across all cameras."""
+    def _get_current_max_frame_locked(self) -> int:
+        """Get the maximum frame ID across all cameras (lock must be held)."""
         max_frame = 0
         for camera_data in self.data.cameras.values():
             for tracklet in camera_data.tracklets.values():
                 if tracklet.end_frame > max_frame:
                     max_frame = tracklet.end_frame
         return max_frame
-    
 
-    def _get_tracklets_in_range(self, start_frame: int, end_frame: int) -> Dict[str, List[Tuple[str, Tracklet]]]:
-        """Get tracklets that overlap with the given frame range."""
+    def _get_tracklets_in_range_locked(self, start_frame: int, end_frame: int) -> Dict[str, List[Tuple[str, Tracklet]]]:
+        """Get tracklets that overlap with the given frame range (lock must be held)."""
+        from collections import defaultdict
         candidates = defaultdict(list)
-        
         for stream_id, camera_data in self.data.cameras.items():
             for track_id, tracklet in camera_data.tracklets.items():
-                # Check if tracklet overlaps with processing window
                 if (tracklet.start_frame <= end_frame and tracklet.end_frame >= start_frame):
                     candidates[stream_id].append((track_id, tracklet))
-
         return candidates
 
     def _process_results(
@@ -154,6 +179,10 @@ class MCTTrackbase:
                     # Build detection records (avoid unnecessary temporaries)
                     for det in tracklet.detections_info:
                         bbox = det.bounding_box
+                        x1 = max(bbox.min_x * W, 0)
+                        y1 = max(bbox.min_y * H, 0)
+                        x2 = min(bbox.max_x * W, W)
+                        y2 = min(bbox.max_y * H, H)
                         # Handle missing geo_coordinate safely
                         lat, lon = -1.0, -1.0
                         try:
@@ -169,7 +198,7 @@ class MCTTrackbase:
                                 lon = float(getattr(gc, "longitude", -1.0))
 
                         detections.append({
-                            "bbox": [float(bbox.min_x * W), float(bbox.min_y * H), float(bbox.max_x * W), float(bbox.max_y * H)],
+                            "bbox": [x1, y1, x2, y2],
                             "frame_id": int(det.frame_id),
                             "geo_coordinate": [lat, lon],
                         })
@@ -217,11 +246,9 @@ class MCTTrackbase:
                     tracklets_to_remove.append(track_id)
             
             for track_id in tracklets_to_remove:
-                try:
-                    del self.data.cameras[stream_id].tracklets[track_id]
-                    removed_count += 1
-                except KeyError:
-                    pass  # Already removed
+                del self.data.cameras[stream_id].tracklets[track_id]
+                removed_count += 1
+
         
         if removed_count > 0:
-            self.logger.debug(f"Cleaned up {removed_count} old tracklets from memory (cutoff_frame: {cutoff_frame})")
+            self.logger.info(f"Cleaned up {removed_count} old tracklets from memory (cutoff_frame: {cutoff_frame})")

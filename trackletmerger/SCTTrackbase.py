@@ -149,6 +149,7 @@ class SCTTrackbase:
 
     def status_update(self, stream_id: str):
         current_time = time.time_ns()
+        remove_list = []
         
         # Update the status of the tracklets in SCTTrackbase
         for track_id, tracklet in self.data.cameras[stream_id].tracklets.items():
@@ -160,6 +161,19 @@ class SCTTrackbase:
             if time_since_end > self.config.merging_config.lost_time and tracklet.status == TrackletStatus.SEARCHING:
                 tracklet.status = TrackletStatus.COMPLETED
                 self.logger.info(f"Tracklet {track_id} in stream {stream_id} is now completed, time since received: {time_since_end} ms")
+
+            if self.config.sct_merging_config.static_filter:
+                # Check if the tracklet is static
+                if len(tracklet.detections_info) >= 400:
+                    first_det = min(tracklet.detections_info, key=lambda d: d.frame_id)
+                    last_det = max(tracklet.detections_info, key=lambda d: d.frame_id)
+                    dist_moved = self._euclidean(self._center_abs(first_det, stream_id), self._center_abs(last_det, stream_id))
+                    if dist_moved < 100:
+                        remove_list.append(track_id)
+
+        for track_id in remove_list:
+            del self.data.cameras[stream_id].tracklets[track_id]
+            self.logger.info(f"Tracklet {track_id} in stream {stream_id} is considered static and removed, distance moved: {dist_moved:.2f} pixels")
 
     def push_completed_tracklets(self, stream_id: str) -> Dict[str,Tracklet]:
         # Push completed tracklets to the MCTTrackbase and remove them from SCTTrackbase
