@@ -1,6 +1,8 @@
 import logging
 import time
 import json
+import threading
+import queue
 from typing import Any, Dict, NamedTuple,Dict, List, Optional, Tuple
 
 from prometheus_client import Counter, Histogram, Summary
@@ -30,10 +32,48 @@ class TrackletMerger:
         logger.setLevel(log_level.value)
         self.sct_trackbase = SCTTrackbase(logger, config)
         self.mct_trackbase = MCTTrackbase(logger, config)
+        self._state_lock = threading.Lock() 
         self.last_processed_time = time.time_ns()
+        self._sct_queues: dict[str, queue.Queue] = {}
+        self._sct_threads: dict[str, threading.Thread] = {}
+        self._stop_event = threading.Event()
 
     def __call__(self, stream_id: str, input_proto: bytes = None) -> Any:
         return self.get(stream_id, input_proto)
+    
+    def _ensure_worker(self, stream_id: str, max_qsize: int = 64) -> None:
+        if stream_id in self._sct_threads:
+            return
+        q = queue.Queue(maxsize=max_qsize)
+        self._sct_queues[stream_id] = q
+        t = threading.Thread(target=self._stream_worker, args=(stream_id,), daemon=True)
+        t.start()
+        self._sct_threads[stream_id] = t
+        logger.info(f"SCT worker started for {stream_id}")
+
+    # NEW: the worker runs your two lines (SCT, then MCT)
+    def _stream_worker(self, stream_id: str):
+        q = self._sct_queues[stream_id]
+        while not self._stop_event.is_set():
+            try:
+                sae_msg = q.get(timeout=0.5) # Get the next message from the queue, will wait 0.5 seconds if there is nothing in the queue, otherwise, get the message immediately
+            except queue.Empty:
+                continue
+
+            try:
+                # Single-Camera processing
+                tracklets_dict = self.sct_trackbase.sct_process(sae_msg, stream_id)
+
+                # Cross-camera processing (thread-safe; see MCT patch below)
+                self.mct_trackbase.process_async(tracklets_dict, stream_id)
+            except Exception as e:
+                logger.exception(f"SCT/MCT worker error on {stream_id}: {e}")
+            finally:
+                q.task_done() # tell the queue we're done with that item
+
+    # (optional) call this on shutdown
+    def stop(self):
+        self._stop_event.set()
     
     @GET_DURATION.time()
     def get(self, stream_id:str, input_proto:bytes = None) -> bytes:
@@ -48,23 +88,24 @@ class TrackletMerger:
         inference_start = time.monotonic_ns()
         self.last_processed_time = time.time_ns()
 
-        # put new sae_msg into SCTTrackbase
-        if len(sae_msg.trajectory.cameras[stream_id].tracklets) > 0:
-            self.sct_trackbase.append(sae_msg, stream_id)
+        # ENSURE worker and enqueue quickly (non-blocking; drop oldest if full)
+        self._ensure_worker(stream_id)
+        q = self._sct_queues[stream_id]
+        try:
+            q.put_nowait(sae_msg)
+        except queue.Full:
+            logger.warning(f"SCT queue full; dropping oldest frame for {stream_id}")
+            # keep latency bounded: drop oldest
+            try:
+                _ = q.get_nowait()
+                q.task_done()
+            except queue.Empty:
+                pass
+            try:
+                q.put_nowait(sae_msg)
+            except queue.Full:
+                logger.warning(f"SCT queue still full; dropping frame for {stream_id}")
 
-        # update status for SCTTrackbase
-        self.sct_trackbase.status_update(stream_id)
-
-        # process the SCTTrackbase
-        self.sct_trackbase.process(stream_id)
-
-        # push completed scttracklets into MCTTrackbase
-        tracklets_dict = self.sct_trackbase.push_completed_tracklets(stream_id)
-
-        self.mct_trackbase.append(tracklets_dict, stream_id)
-
-        # Multi-Camera Tracking Matching in a separate thread
-        self.mct_trackbase.process_async()
 
         # Save the matched results, prune the tracklets in MCTTrackbase
             

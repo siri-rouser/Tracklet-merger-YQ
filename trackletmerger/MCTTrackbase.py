@@ -25,59 +25,38 @@ class MCTTrackbase:
         self.overlap_frames = config.merging_config.overlap_frames  # e.g., 200
         self.matcher = CrossCameraMatcher(logger, config)
         self._state_lock = threading.Lock()   # protects self.data and frame markers
-        self._worker = None                   # background thread handle
 
-    def append(self, tracklets_dict:Dict[str,Tracklet], stream_id: str) -> None:
+    def _append(self, tracklets_dict:Dict[str,Tracklet], stream_id: str) -> None:
         """
         Append a new SaeMessage to the tracklet database.
         """
+        if stream_id not in self.data.cameras:
+            self.data.cameras[stream_id].CopyFrom(TrackletsByCamera())
+
+        for track_id,tracklet in tracklets_dict.items():
+            if track_id not in self.data.cameras[stream_id].tracklets:
+                self.data.cameras[stream_id].tracklets[track_id].CopyFrom(tracklet)
+            else:
+                self.logger.warning(f"Tracklet {track_id} already exists in stream {stream_id}. Skipping append.")
+
+    def process_async(self, tracklets_dict, stream_id) -> None:
+        # 0) Append new tracklets under lock
         with self._state_lock:
-            if stream_id not in self.data.cameras:
-                self.data.cameras[stream_id].CopyFrom(TrackletsByCamera())
+            self._append(tracklets_dict, stream_id)
 
-            for track_id,tracklet in tracklets_dict.items():
-                if track_id not in self.data.cameras[stream_id].tracklets:
-                    self.data.cameras[stream_id].tracklets[track_id].CopyFrom(tracklet)
-                else:
-                    self.logger.warning(f"Tracklet {track_id} already exists in stream {stream_id}. Skipping append.")
-
-    def process_async(self) -> None:
-        """
-        Launch one background processing thread if not already running and if a window is ready.
-        Safe to call on every get(); it will no-op when a worker is active.
-        """
-        # If a worker is already running, do nothing
-        if self._worker and self._worker.is_alive():
-            return
-
-        # Check readiness under the lock (read shared state safely)
-        with self._state_lock:
             current_frame = self._get_current_max_frame_locked()
+
             self.logger.info(f"Current max frame: {current_frame}, Last processed frame: {self.last_processed_frame} -------------------------")
-            ready = (current_frame - self.last_processed_frame) >= self.config.merging_config.frame_window
 
-        if not ready:
-            return
-
-        # Start a daemon worker (dies automatically when main process exits)
-        self._worker = threading.Thread(target=self._process_internal, daemon=True)
-        self._worker.start()
-
-    def _process_internal(self):
-        # 1) Take a snapshot of the necessary state under the lock
-        with self._state_lock:
-            current_frame = self._get_current_max_frame_locked()
-            
-            if current_frame - self.last_processed_frame < self.config.merging_config.frame_window:
+            if (current_frame - self.last_processed_frame) < self.config.merging_config.frame_window:
                 return
-
+            
             start_frame = max(0, self.last_processed_frame)
             end_frame = current_frame
-
-            # Snapshot candidate tracklets quickly under lock; release before heavy work
+            # Snapshot candidates under lock; list/dicts are local copies
             candidate_tracklets = self._get_tracklets_in_range_locked(start_frame, end_frame)
 
-        # 2) Heavy work without holding the lock
+        # Heavy work (no lock)
         if len(candidate_tracklets) < 2:
             self.logger.debug("Not enough tracklets for cross-camera matching")
             return
@@ -86,17 +65,18 @@ class MCTTrackbase:
         reid_dict = self.matcher.match(candidate_tracklets, start_frame, end_frame)
         self.matcher.reset_global_tracking()
 
+        # Write results + cleanup under lock again (mutates self.data & markers)
         if reid_dict:
             self._process_results(reid_dict, candidate_tracklets, start_frame, end_frame)
         else:
             self.logger.info("No matches found in this processing window.")
 
-        # 3) Update frame markers and cleanup under the lock again
+        self.last_processed_frame = end_frame - self.overlap_frames
+
         with self._state_lock:
-            self.last_processed_frame = end_frame - self.overlap_frames
             self._cleanup_old_tracklets(start_frame - self.overlap_frames)
 
-        self.logger.info(f"Completed processing window [{start_frame}, {end_frame}]")
+            self.logger.info(f"Completed processing window [{start_frame}, {end_frame}]")
 
 
     def _get_current_max_frame_locked(self) -> int:
@@ -223,9 +203,6 @@ class MCTTrackbase:
             self.logger.info("No tracklet results to save")
         else:
             self.logger.info(f"Saved {wrote} tracklet results to {self.results_file}")
-
-        # Cleanup
-        self._cleanup_old_tracklets(start_frame - self.overlap_frames)
 
 
     def _cleanup_old_tracklets(self, cutoff_frame: int):

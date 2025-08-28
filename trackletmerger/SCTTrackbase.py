@@ -1,6 +1,7 @@
 import numpy as np
 import logging
 import cv2
+import threading
 import math
 import time
 import json
@@ -17,15 +18,33 @@ class SCTTrackbase:
         self.config = config
         self._zone_data_setup()
         self._process_flag = False
+        self._state_lock = threading.Lock() 
         self.sct_search_distance = {} 
         for stream_id in config.merging_config.original_img_size:
             self.sct_search_distance[stream_id] = \
                 config.sct_merging_config.max_pixel_distance_ratio * config.merging_config.original_img_size[stream_id][0] 
 
-    def append(self, sae_msg: SaeMessage, stream_id: str):
+    def sct_process(self,sae_msg: SaeMessage, stream_id: str):
+        # put new sae_msg into SCTTrackbase
+        if len(sae_msg.trajectory.cameras[stream_id].tracklets) > 0:
+            self._append(sae_msg, stream_id)
+
+        # update status for SCTTrackbase
+        self._status_update(stream_id)
+
+        # process the SCTTrackbase
+        self._process(stream_id)
+
+        completed_tracklets = self._push_completed_tracklets(stream_id)
+
+        return completed_tracklets
+
+    def _append(self, sae_msg: SaeMessage, stream_id: str):
         # Initialize the trajectory data
         if stream_id not in self.data.cameras:
-            self.data.cameras[stream_id].CopyFrom(TrackletsByCamera())
+            with self._state_lock:
+                if stream_id not in self.data.cameras:  # double-check inside lock
+                    self.data.cameras[stream_id].CopyFrom(TrackletsByCamera())
 
         for track_id in sae_msg.trajectory.cameras[stream_id].tracklets:
             current_tracklet = sae_msg.trajectory.cameras[stream_id].tracklets[track_id]
@@ -44,7 +63,7 @@ class SCTTrackbase:
             self.data.cameras[stream_id].tracklets[track_id].status = self._default_status(entry_zone_cls, exit_zone_cls)
             self._process_flag = True
 
-    def process(self,stream_id: str):
+    def _process(self,stream_id: str):
         if (stream_id not in self.data.cameras or len(self.data.cameras[stream_id].tracklets) < 2 or not self._process_flag):
             self.logger.debug(f"Skip processing for stream {stream_id}. Not enough tracklets or no new data.")
             return
@@ -147,7 +166,7 @@ class SCTTrackbase:
         # After merging, we consider the processing handled
         self._process_flag = False
 
-    def status_update(self, stream_id: str):
+    def _status_update(self, stream_id: str):
         current_time = time.time_ns()
         remove_list = []
         
@@ -175,7 +194,7 @@ class SCTTrackbase:
             del self.data.cameras[stream_id].tracklets[track_id]
             self.logger.info(f"Tracklet {track_id} in stream {stream_id} is considered static and removed, distance moved: {dist_moved:.2f} pixels")
 
-    def push_completed_tracklets(self, stream_id: str) -> Dict[str,Tracklet]:
+    def _push_completed_tracklets(self, stream_id: str) -> Dict[str,Tracklet]:
         # Push completed tracklets to the MCTTrackbase and remove them from SCTTrackbase
         completed_tracklets:Dict[str,Tracklet] = {}
         removed_tracklets = []
