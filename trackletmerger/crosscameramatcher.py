@@ -213,8 +213,8 @@ class CrossCameraMatcher:
                 if g_id == global_id]
 
     def reset_global_tracking(self):
-        """Reset global tracking state (useful for testing or restarting)."""
+        """Reset global tracking state (useful for clean up memeory)."""
         self.global_reid_dict = {}
-        self.global_id_counter = 0
+        # self.global_id_counter = 0
         self.tracklet_to_global_id = {}
         self.logger.info("Reset global tracking state")

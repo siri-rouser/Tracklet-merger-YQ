@@ -63,8 +63,8 @@ class TrackletMerger:
 
         self.mct_trackbase.append(tracklets_dict, stream_id)
 
-        # Greedy match from unmatched tracklets in MCTTrackbase (if there are any new tracklets in MCTTrackbase)
-        self.mct_trackbase.process()
+        # Multi-Camera Tracking Matching in a separate thread
+        self.mct_trackbase.process_async()
 
         # Save the matched results, prune the tracklets in MCTTrackbase
             
