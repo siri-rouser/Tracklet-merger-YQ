@@ -133,7 +133,7 @@ class SCTTrackbase:
                         self.logger.debug(f"[SCT merge] stream={stream_id} {ida} -> {idb} | features not available, skipping")
                         continue
                     cost = min(self._cosine_distance(fa, fb),self._cosine_distance(mfa, mfb))
-                    self.logger.debug(f"[SCT merge] stream={stream_id} {ida} -> {idb} | features cosine distance={cost:.4f}")
+                    self.logger.debug(f"[SCT merge] stream={stream_id} {ida} -> {idb} | features cosine distance={cost:.4f} | frame_gap={frame_gap} | ecuclidean={self._euclidean(exit_point[ida], entry_point[idb]):.4f}")
                     if np.isfinite(cost) and cost < self.config.sct_merging_config.cosine_threshold:
                         candidates.append((float(cost), ida, idb))
 
@@ -158,8 +158,8 @@ class SCTTrackbase:
                     continue
                 # Merge b into a (a is the earlier tracklet)
                 self._merge_tracklets(stream_id, a, b)
-                self.logger.warning(
-                    f"[SCT merge] stream={stream_id} {a} <- {b} | cost={cost:.4f}"
+                self.logger.info(
+                    f"[SCT merge] stream={stream_id} {a} <- {b} | cost={cost:.4f}|  frame_gap={frame_gap} | ecuclidean={self._euclidean(exit_point[ida], entry_point[idb]):.4f}"
                 )
                 merged_any = True
 
@@ -183,11 +183,11 @@ class SCTTrackbase:
 
             if self.config.sct_merging_config.static_filter:
                 # Check if the tracklet is static
-                if len(tracklet.detections_info) >= 400:
+                if len(tracklet.detections_info) >= 100:
                     first_det = min(tracklet.detections_info, key=lambda d: d.frame_id)
                     last_det = max(tracklet.detections_info, key=lambda d: d.frame_id)
                     dist_moved = self._euclidean(self._center_abs(first_det, stream_id), self._center_abs(last_det, stream_id))
-                    if dist_moved < 100:
+                    if dist_moved < 50:
                         remove_list.append(track_id)
 
         for track_id in remove_list:
@@ -208,6 +208,12 @@ class SCTTrackbase:
                 self.logger.info(f"Pushing completed tracklet {track_id} from stream {stream_id} to MCTTrackbase.")
                 # Remove the completed tracklet from SCTTrackbase
                 removed_tracklets.append(track_id)
+                # Print zone information for the completed tracklet
+                zone = tracklet.zone
+                self.logger.info(
+                    f"Tracklet {track_id} zone info: entry_zone_id={zone.entry_zone_id}, exit_zone_id={zone.exit_zone_id}, "
+                    f"entry_zone_type={zone.entry_zone_type}, exit_zone_type={zone.exit_zone_type}"
+                )
 
         for track_id in removed_tracklets:
             try:
@@ -352,30 +358,27 @@ class SCTTrackbase:
         exit_det = max(tracklet.detections_info, key=lambda d: d.frame_id)
 
         def bbox_center_xyxy(bb):
-            cx = 0.5 * (bb.min_x + bb.max_x) * self.config.merging_config.original_img_size[stream_id][0]
-            cy = 0.5 * (bb.min_y + bb.max_y) * self.config.merging_config.original_img_size[stream_id][1]
+            W, H = self.config.merging_config.original_img_size[stream_id]
+            cx = 0.5 * (bb.min_x + bb.max_x) * W
+            cy = 0.5 * (bb.min_y + bb.max_y) * H
             return (cx, cy)
 
         entry_point = bbox_center_xyxy(entry_det.bounding_box)
         exit_point  = bbox_center_xyxy(exit_det.bounding_box)
 
-        def _is_point_in_bbox(point, bbox):
-            # NOTE: changed to use 20 pixels margin for entry/exit detection
-            margin = 20
-            x, y = point
-            x1, y1, x2, y2 = bbox
-            return min(x1-margin,0) <= x <= max(x2+margin,2560) and min(y1-margin,0) <= y <= max(y2+margin,1440)
-
         for zone in self.zone_data[stream_id].values():
-            if _is_point_in_bbox(entry_point,zone['rect_area']):
-                entry_zone_id = int(zone['zone_id'])
-                entry_zone_cls = ZoneStatus.ENTRY if zone['zone_cls'] == 'entry_zone' else (
-                    ZoneStatus.EXIT if zone['zone_cls'] == 'exit_zone' else ZoneStatus.UNDEFINED)
-            if _is_point_in_bbox(exit_point,zone['rect_area']):
-                exit_zone_id = int(zone['zone_id'])
-                exit_zone_cls = ZoneStatus.ENTRY if zone['zone_cls'] == 'entry_zone' else (
-                    ZoneStatus.EXIT if zone['zone_cls'] == 'exit_zone' else ZoneStatus.UNDEFINED)
-        
+            if zone['zone_cls'] == 'entry_zone':
+                if self._is_point_in_bbox(entry_point,zone['rect_area'],orig_size=(3840, 2160), new_size=(self.config.merging_config.original_img_size[stream_id][0], self.config.merging_config.original_img_size[stream_id][1])):
+                    entry_zone_id = int(zone['zone_id'])
+                    entry_zone_cls = ZoneStatus.ENTRY if zone['zone_cls'] == 'entry_zone' else (
+                        ZoneStatus.EXIT if zone['zone_cls'] == 'exit_zone' else ZoneStatus.UNDEFINED)
+
+            if zone['zone_cls'] == 'exit_zone':
+                if self._is_point_in_bbox(exit_point,zone['rect_area'],orig_size=(3840, 2160), new_size=(self.config.merging_config.original_img_size[stream_id][0], self.config.merging_config.original_img_size[stream_id][1])):
+                    exit_zone_id = int(zone['zone_id'])
+                    exit_zone_cls = ZoneStatus.ENTRY if zone['zone_cls'] == 'entry_zone' else (
+                        ZoneStatus.EXIT if zone['zone_cls'] == 'exit_zone' else ZoneStatus.UNDEFINED)
+            
         return entry_zone_id, exit_zone_id, entry_zone_cls, exit_zone_cls
     
     def _default_status(self, entry_zone_cls, exit_zone_cls) -> TrackletStatus:
@@ -383,3 +386,25 @@ class SCTTrackbase:
             return TrackletStatus.COMPLETED
         else:
             return TrackletStatus.ACTIVE
+        
+    def _is_point_in_bbox(self, point, bbox, orig_size=(3840, 2160), new_size=(2560, 1440), margin=20):
+        """
+        Check if a point lies inside a bbox (with margin), 
+        scaling bbox from orig_size to new_size if needed.
+        """
+        x, y = point
+        x1, y1, x2, y2 = bbox
+
+        # scaling factors
+        scale_x = new_size[0] / orig_size[0]
+        scale_y = new_size[1] / orig_size[1]
+
+        # scale bbox
+        x1 = int(x1 * scale_x)
+        x2 = int(x2 * scale_x)
+        y1 = int(y1 * scale_y)
+        y2 = int(y2 * scale_y)
+
+        # check with margin
+        return (max(0, x1 - margin) <= x <= min(new_size[0], x2 + margin)) and \
+            (max(0, y1 - margin) <= y <= min(new_size[1], y2 + margin))

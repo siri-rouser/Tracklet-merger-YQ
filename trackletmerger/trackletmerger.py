@@ -109,9 +109,9 @@ class TrackletMerger:
 
         # Save the matched results, prune the tracklets in MCTTrackbase
             
-        inference_time_us = (time.monotonic_ns() - inference_start) // 1000
+        # inference_time_us = (time.monotonic_ns() - inference_start) // 1000
 
-        return self._create_output(stream_id,inference_time_us,sae_msg)
+        # return self._create_output(stream_id,inference_time_us,sae_msg)
         
     @PROTO_DESERIALIZATION_DURATION.time()
     def _unpack_proto(self, sae_message_bytes):

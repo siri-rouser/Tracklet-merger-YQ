@@ -169,7 +169,7 @@ def run_stage():
             if stream_key is not None:
                stream_id = stream_key.split(':')[1]
 
-            output_proto_data = trackletmerger.get(stream_id,proto_data)
+            trackletmerger.get(stream_id,proto_data)
 
             # with REDIS_PUBLISH_DURATION.time():
             #     publish(f'{CONFIG.redis.output_stream_prefix}:{stream_id}', output_proto_data)
