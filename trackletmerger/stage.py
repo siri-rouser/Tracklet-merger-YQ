@@ -155,7 +155,7 @@ def run_stage():
 
     consume = RedisConsumer(CONFIG.redis.host, CONFIG.redis.port, 
                             stream_keys=[f'{CONFIG.redis.input_stream_prefix}:{stream_id}' for stream_id in CONFIG.merging_config.input_stream_ids],
-                            block=500)
+                            block=400)
     # publish = RedisPublisher(CONFIG.redis.host, CONFIG.redis.port)
     
     with consume:
@@ -163,11 +163,11 @@ def run_stage():
             if stop_event.is_set():
                 break
 
-            if proto_data is None or stream_key is None:
-                continue
-
             if stream_key is not None:
                stream_id = stream_key.split(':')[1]
+
+            if proto_data is None and stream_key is None:
+                stream_id = 'stream1'
 
             trackletmerger.get(stream_id,proto_data)
 

@@ -29,6 +29,7 @@ PROTO_DESERIALIZATION_DURATION = Summary('my_stage_proto_deserialization_duratio
 class TrackletMerger:
     def __init__(self, config: TrackletMergerConfig, log_level: LogLevel) -> None:
         self._config = config
+        self.last_process_trigger = False
         logger.setLevel(log_level.value)
         self.sct_trackbase = SCTTrackbase(logger, config)
         self.mct_trackbase = MCTTrackbase(logger, config)
@@ -65,11 +66,17 @@ class TrackletMerger:
                 tracklets_dict = self.sct_trackbase.sct_process(sae_msg, stream_id)
 
                 # Cross-camera processing (thread-safe; see MCT patch below)
-                self.mct_trackbase.process_async(tracklets_dict, stream_id)
+                self.mct_trackbase.process_async(tracklets_dict, stream_id, self.last_process_trigger)
+
+                if self.last_process_trigger:
+                    self._stop_event.set()
+
             except Exception as e:
                 logger.exception(f"SCT/MCT worker error on {stream_id}: {e}")
             finally:
                 q.task_done() # tell the queue we're done with that item
+
+
 
     # (optional) call this on shutdown
     def stop(self):
@@ -77,15 +84,19 @@ class TrackletMerger:
     
     @GET_DURATION.time()
     def get(self, stream_id:str, input_proto:bytes = None) -> bytes:
+        current_time = time.time_ns()
         if input_proto is not None:
             sae_msg = self._unpack_proto(input_proto)
-            current_time = time.time_ns()
-            if len(sae_msg.trajectory.cameras[stream_id].tracklets) == 0 and (current_time - self.last_processed_time) // 1_000_000 < self._config.refresh_interval:
+            if len(sae_msg.trajectory.cameras[stream_id].tracklets) == 0 and ((current_time - self.last_processed_time) // 1_000_000 < self._config.refresh_interval):
                 return b''
         else:
-            return b''
+            if (current_time - self.last_processed_time) // 1_000_000 < self._config.last_process_interval:
+                return b''
+            else:
+                logger.warning('The last processing, program exit after processing ...')
+                self.last_process_trigger = True
+                sae_msg = SaeMessage()
 
-        inference_start = time.monotonic_ns()
         self.last_processed_time = time.time_ns()
 
         # ENSURE worker and enqueue quickly (non-blocking; drop oldest if full)

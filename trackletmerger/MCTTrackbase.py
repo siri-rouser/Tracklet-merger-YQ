@@ -25,6 +25,7 @@ class MCTTrackbase:
         self.overlap_frames = config.merging_config.overlap_frames  # e.g., 200
         self.matcher = CrossCameraMatcher(logger, config)
         self._state_lock = threading.Lock()   # protects self.data and frame markers
+        self.stop_event = threading.Event()
 
     def _append(self, tracklets_dict:Dict[str,Tracklet], stream_id: str) -> None:
         """
@@ -39,7 +40,7 @@ class MCTTrackbase:
             else:
                 self.logger.warning(f"Tracklet {track_id} already exists in stream {stream_id}. Skipping append.")
 
-    def process_async(self, tracklets_dict, stream_id) -> None:
+    def process_async(self, tracklets_dict, stream_id, last_process_trigger) -> None:
         # 0) Append new tracklets under lock
         with self._state_lock:
             self._append(tracklets_dict, stream_id)
@@ -48,7 +49,7 @@ class MCTTrackbase:
 
             self.logger.info(f"Current max frame: {current_frame}, Last processed frame: {self.last_processed_frame} -------------------------")
 
-            if (current_frame - self.last_processed_frame) < self.config.merging_config.frame_window:
+            if ((current_frame - self.last_processed_frame) < self.config.merging_config.frame_window) and (not last_process_trigger):
                 return
             
             start_frame = max(0, self.last_processed_frame)
