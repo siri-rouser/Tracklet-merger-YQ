@@ -15,7 +15,7 @@ import atexit
 from visionapi_yq.messages_pb2 import Detection, SaeMessage
 
 logger = logging.getLogger(__name__)
-
+ 
 REDIS_PUBLISH_DURATION = Histogram('my_stage_redis_publish_duration', 'The time it takes to push a message onto the Redis stream',
                                    buckets=(0.0025, 0.005, 0.0075, 0.01, 0.025, 0.05, 0.075, 0.1, 0.15, 0.2, 0.25))
 
@@ -155,7 +155,7 @@ def run_stage():
 
     consume = RedisConsumer(CONFIG.redis.host, CONFIG.redis.port, 
                             stream_keys=[f'{CONFIG.redis.input_stream_prefix}:{stream_id}' for stream_id in CONFIG.merging_config.input_stream_ids],
-                            block=400)
+                            block=500)
     # publish = RedisPublisher(CONFIG.redis.host, CONFIG.redis.port)
     
     with consume:
@@ -164,10 +164,9 @@ def run_stage():
                 break
 
             if stream_key is not None:
-               stream_id = stream_key.split(':')[1]
-
-            if proto_data is None and stream_key is None:
-                stream_id = 'stream1'
+                stream_id = stream_key.split(':')[1]
+            else:
+                stream_id = 'stream1'  # default stream_id if stream_key is None
 
             trackletmerger.get(stream_id,proto_data)
 

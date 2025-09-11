@@ -27,33 +27,33 @@ class MCTTrackbase:
         self._state_lock = threading.Lock()   # protects self.data and frame markers
         self.stop_event = threading.Event()
 
-    def _append(self, tracklets_dict:Dict[str,Tracklet], stream_id: str) -> None:
+    def append(self, tracklets_dict:Dict[str,Tracklet], stream_id: str) -> None:
         """
         Append a new SaeMessage to the tracklet database.
         """
-        if stream_id not in self.data.cameras:
-            self.data.cameras[stream_id].CopyFrom(TrackletsByCamera())
+        with self._state_lock:
+            if stream_id not in self.data.cameras:
+                self.data.cameras[stream_id].CopyFrom(TrackletsByCamera())
 
-        for track_id,tracklet in tracklets_dict.items():
-            if track_id not in self.data.cameras[stream_id].tracklets:
-                self.data.cameras[stream_id].tracklets[track_id].CopyFrom(tracklet)
-            else:
-                self.logger.warning(f"Tracklet {track_id} already exists in stream {stream_id}. Skipping append.")
+            for track_id,tracklet in tracklets_dict.items():
+                if track_id not in self.data.cameras[stream_id].tracklets:
+                    self.data.cameras[stream_id].tracklets[track_id].CopyFrom(tracklet)
+                else:
+                    self.logger.warning(f"Tracklet {track_id} already exists in stream {stream_id}. Skipping append.")
 
-    def process_async(self, tracklets_dict, stream_id, last_process_trigger) -> None:
+    def process_async(self, last_process_trigger) -> None:
+
+        current_max_frame = self._get_current_max_frame_locked()
+
+        self.logger.info(f"Current max frame: {current_max_frame}, Last processed frame: {self.last_processed_frame} -------------------------")
+
+        if ((current_max_frame - self.last_processed_frame) < self.config.merging_config.frame_window) and (not last_process_trigger):
+            return
+        
+        start_frame = max(0, self.last_processed_frame)
+        end_frame = current_max_frame
         # 0) Append new tracklets under lock
         with self._state_lock:
-            self._append(tracklets_dict, stream_id)
-
-            current_frame = self._get_current_max_frame_locked()
-
-            self.logger.info(f"Current max frame: {current_frame}, Last processed frame: {self.last_processed_frame} -------------------------")
-
-            if ((current_frame - self.last_processed_frame) < self.config.merging_config.frame_window) and (not last_process_trigger):
-                return
-            
-            start_frame = max(0, self.last_processed_frame)
-            end_frame = current_frame
             # Snapshot candidates under lock; list/dicts are local copies
             candidate_tracklets = self._get_tracklets_in_range_locked(start_frame, end_frame)
 
@@ -62,7 +62,7 @@ class MCTTrackbase:
             self.logger.debug("Not enough tracklets for cross-camera matching")
             return
 
-        self.logger.info(f"Starting cross-camera processing at frame {current_frame}")
+        self.logger.info(f"Starting cross-camera processing at frame {current_max_frame}")
         reid_dict = self.matcher.match(candidate_tracklets, start_frame, end_frame)
         self.matcher.reset_global_tracking()
 

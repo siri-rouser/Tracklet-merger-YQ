@@ -163,7 +163,7 @@ class ReIDCalculator:
         return np.array(zone_remove, dtype=bool)
 
 
-    def calc(self, dismat, q_track_ids, q_cam_ids, g_track_ids, g_cam_ids,
+    def calc_hungarian(self, dismat, q_track_ids, q_cam_ids, g_track_ids, g_cam_ids,
             q_times, g_times, q_entry_zn, q_exit_zn, g_entry_zn, g_exit_zn):
         """
         Returns:
@@ -252,85 +252,85 @@ class ReIDCalculator:
                 if not rm_dict[q_cam]:
                     del rm_dict[q_cam]
 
-        # ---------- 5) (Optional) mark queries that had valid pairs but weren't assigned ----------
-        # If you want, uncomment to mark 'losers' as unmatched:
-        # assigned_rows = set(row_ind.tolist())
-        # for r in range(Q):
-        #     if valid_mask[r].any() and r not in assigned_rows:
-        #         q_cam = int(q_cam_ids[r]); q_id = int(q_track_ids[r])
-        #         rm_dict.setdefault(q_cam, {})[q_id] = True
 
-        # Return matches, rm_dict, and the updated dismat (with KDE adjustments)
         return matches, rm_dict
 
 
     # NOTE: below is the original version(greedy match) of calc function before changing it to Hungarian algorithm
-    # def calc(self, dismat,q_track_ids,q_cam_ids, g_track_ids, g_cam_ids, q_times, g_times, q_entry_zn, q_exit_zn, g_entry_zn, g_exit_zn):
-    #     '''
-    #     dismat: distance matrix
-    #     q_track_ids: query tracklet ids
-    #     q_cam_ids: query camera ids e.g. int(1), 2, 3
-    #     q_times: [start_frame, end_frame] for query tracklet
-    #     q_entry_zn: [entry_zone_id, entry_zone_type] for query tracklet
-    #     q_exit_zn: [exit_zone_id, exit_zone_type] for query tracklet
-    #     '''
-    #     # matches = List[(cam_id, track_id, matched_cam_id, matched_track_id, distance)]
+    def calc_greedy(self, dismat, q_track_ids, q_cam_ids, g_track_ids, g_cam_ids,
+            q_times, g_times, q_entry_zn, q_exit_zn, g_entry_zn, g_exit_zn):
+        """
+        Returns:
+            matches: List[(cam_id, track_id, matched_cam_id, matched_track_id, distance)]
+            rm_dict: Dict[int, Dict[int, bool]]
+        """
+        rm_dict = {}
+        matches = []
 
-    #     rm_dict = {}
-    #     reid_dict = {}
-    #     matches = []
-    #     indices = np.argsort(dismat, axis=1)
+        Q, G = dismat.shape
+        indices = np.argsort(dismat, axis=1)           # (Q, G) per-row column orderings
+        valid_mask = np.zeros_like(dismat, dtype=bool) # True where pair survives filters
 
-    #     for index, q_track_id in enumerate(q_track_ids):
-    #         q_cam_id = q_cam_ids[index]
-    #         q_time = q_times[index]
-    #         order = indices[index]
+        warned_clm = False
 
-    #         if self.clm is None:
-    #             # directly solve the cost-matrix
-    #             self.logger.warning(f"Camera link model not found")
-    #             remove = (g_cam_ids[order] == q_cam_id) | (dismat[index][order] > self.dis_thre) 
-    #         else:
-    #             dismat, directions = self._kde_filter(dismat, index, order, q_time, g_times,q_cam_id, g_cam_ids)
-    #             zone_remove = self._zone_remove(q_entry_zn[index], q_exit_zn[index], g_entry_zn, g_exit_zn,q_cam_id, g_cam_ids,order,directions)
+        # ---------- 1) Per-row filtering to fill valid_mask (and update dismat via KDE) ----------
+        for row, q_track_id in enumerate(q_track_ids):
+            q_cam_id = q_cam_ids[row]
+            q_time   = q_times[row]
+            order    = indices[row]
 
-    #             remove = (g_cam_ids[order] == q_cam_id) | \
-    #                     (dismat[index][order] > self.dis_thre) | \
-    #                     zone_remove
+            if self.clm is None:
+                if not warned_clm:
+                    self.logger.warning("Camera link model not found; skipping KDE time prior.")
+                    warned_clm = True
+                # Filter: same-cam or > threshold -> remove
+                remove = (g_cam_ids[order] == q_cam_id) | (dismat[row][order] > self.dis_thre)
+            else:
+                dismat, directions = self._kde_filter(dismat, row, order, q_time, g_times, q_cam_id, g_cam_ids)
+                zone_remove = self._zone_remove(
+                    q_entry_zn[row], q_exit_zn[row],
+                    g_entry_zn, g_exit_zn,
+                    q_cam_id, g_cam_ids, order, directions
+                )
+                remove = (g_cam_ids[order] == q_cam_id) | (dismat[row][order] > self.dis_thre) | zone_remove
 
-    #         keep = np.invert(remove)
-    #         remove_hard = (g_cam_ids[order] == q_cam_id) | \
-    #                       (dismat[index][order] > self.dis_remove)
-    #         keep_hard = np.invert(remove_hard)
+            keep = ~remove
+            if np.any(keep):
+                valid_mask[row, order[keep]] = True
+            else:
+                # No acceptable candidate for this query -> mark now
+                rm_dict.setdefault(int(q_cam_id), {})[int(q_track_id)] = True
 
-    #         if not np.any(keep_hard):
-    #             rm_dict.setdefault(q_cam_id, {})[q_track_id] = True
-    #             continue
+        # ---------- 2) Build cost matrix for greedy assignment ----------
+        LARGE = 1e6
+        cost = np.where(valid_mask, dismat, LARGE)
 
-    #         sel_g_dis = dismat[index][order][keep]
-    #         sel_g_track_ids = g_track_ids[order][keep]
-    #         sel_g_cam_ids = g_cam_ids[order][keep]
+        # ---------- 3) Global greedy one-to-one selection ----------
+        # Flatten all valid pairs and sort by ascending cost
+        flat = [(r, c, cost[r, c]) for r in range(Q) for c in range(G) if valid_mask[r, c]]
+        flat.sort(key=lambda x: x[2])
 
-    #         if sel_g_dis.size > 0:
-    #             # pick the single best gallery candidate for this query
-    #             best_idx       = int(np.argmin(sel_g_dis))
-    #             best_g_track   = int(sel_g_track_ids[best_idx])
-    #             best_g_cam     = sel_g_cam_ids[best_idx]
-    #             best_dis       = float(sel_g_dis[best_idx])
+        used_rows, used_cols = set(), set()
+        selected = []
+        for r, c, v in flat:
+            if v >= LARGE:
+                continue
+            if v > float(self.dis_thre):
+                continue
+            if (r not in used_rows) and (c not in used_cols):
+                used_rows.add(r)
+                used_cols.add(c)
+                selected.append((r, c, v))
 
-    #             # record the proposal
-    #             matches.append((int(q_cam_id), int(q_track_id), int(best_g_cam), best_g_track, best_dis))
+        # ---------- 4) Build matches from greedy selection (mirror Hungarian semantics) ----------
+        for r, c, v in selected:
+            q_cam = int(q_cam_ids[r]); q_id = int(q_track_ids[r])
+            g_cam = int(g_cam_ids[c]); g_id = int(g_track_ids[c])
+            matches.append((q_cam, q_id, g_cam, g_id, float(v)))
+            # clear earlier "unmatched" mark if present
+            if q_cam in rm_dict and q_id in rm_dict[q_cam]:
+                del rm_dict[q_cam][q_id]
+                if not rm_dict[q_cam]:
+                    del rm_dict[q_cam]
 
-    #     best_for_gallery = {}  # key: (g_cam, g_id) -> (dis, tuple_match)
-    #     for (q_cam, q_id, g_cam, g_id, dis) in matches:
-    #         key = (g_cam, g_id)
-    #         if key not in best_for_gallery or dis < best_for_gallery[key][0]:
-    #             best_for_gallery[key] = (dis, (q_cam, q_id, g_cam, g_id, dis))
-
-    #     # winners = set of match tuples we keep
-    #     winners = { tup for _, tup in best_for_gallery.values() }
-
-    #     # filter matches down to winners only
-    #     matches = [m for m in matches if m in winners]
-
-    #     return matches, rm_dict
+        return matches, rm_dict

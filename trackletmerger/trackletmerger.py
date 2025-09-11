@@ -63,10 +63,17 @@ class TrackletMerger:
 
             try:
                 # Single-Camera processing
-                tracklets_dict = self.sct_trackbase.sct_process(sae_msg, stream_id)
+                if self.last_process_trigger:
+                    for stream_id in self._sct_queues.keys():
+                        tracklets_dict = self.sct_trackbase.sct_final_process(stream_id)
+                        self.mct_trackbase.append(tracklets_dict,stream_id)
+                else:
+                    tracklets_dict = self.sct_trackbase.sct_process(sae_msg, stream_id)
+                    self.mct_trackbase.append(tracklets_dict, stream_id)
 
                 # Cross-camera processing (thread-safe; see MCT patch below)
-                self.mct_trackbase.process_async(tracklets_dict, stream_id, self.last_process_trigger)
+                
+                self.mct_trackbase.process_async(self.last_process_trigger)
 
                 if self.last_process_trigger:
                     self._stop_event.set()
@@ -85,17 +92,17 @@ class TrackletMerger:
     @GET_DURATION.time()
     def get(self, stream_id:str, input_proto:bytes = None) -> bytes:
         current_time = time.time_ns()
-        if input_proto is not None:
-            sae_msg = self._unpack_proto(input_proto)
-            if len(sae_msg.trajectory.cameras[stream_id].tracklets) == 0 and ((current_time - self.last_processed_time) // 1_000_000 < self._config.refresh_interval):
-                return b''
-        else:
-            if (current_time - self.last_processed_time) // 1_000_000 < self._config.last_process_interval:
-                return b''
-            else:
-                logger.warning('The last processing, program exit after processing ...')
-                self.last_process_trigger = True
-                sae_msg = SaeMessage()
+
+        if (current_time - self.last_processed_time) / 1e6 > self._config.last_process_interval:
+            logger.warning('The last processing, program exit after processing ...')
+            self.last_process_trigger = True
+            stream_id = 'stream1'
+            input_proto = b''
+
+        if input_proto is None:
+            return
+
+        sae_msg = self._unpack_proto(input_proto)
 
         self.last_processed_time = time.time_ns()
 
@@ -118,12 +125,6 @@ class TrackletMerger:
                 logger.warning(f"SCT queue still full; dropping frame for {stream_id}")
 
 
-        # Save the matched results, prune the tracklets in MCTTrackbase
-            
-        # inference_time_us = (time.monotonic_ns() - inference_start) // 1000
-
-        # return self._create_output(stream_id,inference_time_us,sae_msg)
-        
     @PROTO_DESERIALIZATION_DURATION.time()
     def _unpack_proto(self, sae_message_bytes):
         # To use sae_msg: sae_msg.trajectory.cameras[camera_id].tracklets[track_id]

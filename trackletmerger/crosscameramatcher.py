@@ -57,7 +57,12 @@ class CrossCameraMatcher:
             reid_cal = ReIDCalculator(self.logger,dis_thre=self.config.merging_config.dis_thre, dis_remove=self.config.merging_config.dis_remove,
                                        dis_alpha=self.config.merging_config.dis_alpha,dis_beta=self.config.merging_config.dis_beta,kde_threshold=self.config.merging_config.kde_threshold,clm=self.clm)
             if dismat.size > 0:
-                matches,rm_dict = reid_cal.calc(dismat,q_track_ids,q_cam_ids, g_track_ids, g_cam_ids, q_times, g_times, q_entry_zn, q_exit_zn, g_enrty_zn, g_exit_zn)
+                if self.config.merging_config.matching_algorithm == 'Greedy' or self.config.merging_config.matching_algorithm == 'greedy':
+                    matches,rm_dict = reid_cal.calc_greedy(dismat,q_track_ids,q_cam_ids, g_track_ids, g_cam_ids, q_times, g_times, q_entry_zn, q_exit_zn, g_enrty_zn, g_exit_zn)
+                elif self.config.merging_config.matching_algorithm == 'Hungarian' or self.config.merging_config.matching_algorithm == 'hungarian':
+                    matches,rm_dict = reid_cal.calc_hungarian(dismat,q_track_ids,q_cam_ids, g_track_ids, g_cam_ids, q_times, g_times, q_entry_zn, q_exit_zn, g_enrty_zn, g_exit_zn)
+                else:
+                    raise ValueError(f"Unknown matching algorithm: {self.config.merging_config.matching_algorithm}")
                 self.logger.info(f"Camera pair {cam_a}-{cam_b} reid_dict: {matches}")
 
                 self.global_reid_dict = self.merge_reid_dict(matches, (cam_a, cam_b))

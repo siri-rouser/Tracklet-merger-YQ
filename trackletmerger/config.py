@@ -36,6 +36,7 @@ class MergingConfig(BaseModel):
     frame_window: int = 2000  # in frames
     overlap_frames: int = 1000  # in frames
     camera_pairs: List[Tuple[str, str]] = Field(default_factory=list)  # List of tuples (stream1, stream2)
+    matching_algorithm: str = 'Greedy'  # Matching algorithm: Greedy or Hungarian
 
 class SCTMergingConfig(BaseModel):
     max_frame_gap: int = 100
@@ -52,6 +53,8 @@ class TrackletMergerConfig(BaseSettings):
     save_directory: Path = Path('./results')
     refresh_interval: int = 10000  # in milliseconds, default is 10 seconds
     last_process_interval: int = 20000  # in milliseconds, default is 20 seconds
+    last_processing_frame: int = 8900  # default is 8900
+    
 
     model_config = SettingsConfigDict(env_nested_delimiter='__')
 
