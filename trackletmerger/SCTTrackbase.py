@@ -38,6 +38,11 @@ class SCTTrackbase:
         completed_tracklets = self._push_completed_tracklets(stream_id)
 
         return completed_tracklets
+    
+    def sct_final_process(self, stream_id: str):
+        self._status_update_final(stream_id)
+        completed_tracklets = self._push_completed_tracklets(stream_id)
+        return completed_tracklets
 
     def _append(self, sae_msg: SaeMessage, stream_id: str):
         # Initialize the trajectory data
@@ -60,7 +65,8 @@ class SCTTrackbase:
             self.data.cameras[stream_id].tracklets[track_id].zone.exit_zone_id = exit_zone_id
             self.data.cameras[stream_id].tracklets[track_id].zone.entry_zone_type = entry_zone_cls
             self.data.cameras[stream_id].tracklets[track_id].zone.exit_zone_type = exit_zone_cls
-            self.data.cameras[stream_id].tracklets[track_id].status = self._default_status(entry_zone_cls, exit_zone_cls)
+            # self.data.cameras[stream_id].tracklets[track_id].status = self._default_status(entry_zone_cls, exit_zone_cls)
+            self.data.cameras[stream_id].tracklets[track_id].status = TrackletStatus.ACTIVE
             self._process_flag = True
 
     def _process(self,stream_id: str):
@@ -73,7 +79,7 @@ class SCTTrackbase:
             merged_any = False
 
             # Select candidate tracklets for merging
-            candidate_ids: List[str] = [track_id for track_id, tracklet in self.data.cameras[stream_id].tracklets.items() if tracklet.status is TrackletStatus.SEARCHING and len(tracklet.detections_info) > 5]
+            candidate_ids: List[str] = [track_id for track_id, tracklet in self.data.cameras[stream_id].tracklets.items() if tracklet.status is TrackletStatus.SEARCHING and len(tracklet.detections_info) > 4]
 
             if len(candidate_ids) < 2:
                 break
@@ -122,7 +128,8 @@ class SCTTrackbase:
                         continue
                     # spatial proximity constraint
                     self.logger.debug(f"[SCT merge] stream={stream_id} {ida} -> {idb} | ecuclidean={self._euclidean(exit_point[ida], entry_point[idb]):.4f}")
-                    if (self._euclidean(exit_point[ida], entry_point[idb]) > self.sct_search_distance[stream_id]):
+                    pixel_dist = self._euclidean(exit_point[ida], entry_point[idb])
+                    if (pixel_dist > self.sct_search_distance[stream_id]):
                         continue
                     # feature availability
                     fa = end_feat.get(ida)
@@ -133,19 +140,19 @@ class SCTTrackbase:
                         self.logger.debug(f"[SCT merge] stream={stream_id} {ida} -> {idb} | features not available, skipping")
                         continue
                     cost = min(self._cosine_distance(fa, fb),self._cosine_distance(mfa, mfb))
-                    self.logger.debug(f"[SCT merge] stream={stream_id} {ida} -> {idb} | features cosine distance={cost:.4f} | frame_gap={frame_gap} | ecuclidean={self._euclidean(exit_point[ida], entry_point[idb]):.4f}")
+                    self.logger.debug(f"[SCT merge] stream={stream_id} {ida} -> {idb} | features cosine distance={cost:.4f} | frame_gap={frame_gap} | ecuclidean={pixel_dist:.4f}")
                     if np.isfinite(cost) and cost < self.config.sct_merging_config.cosine_threshold:
-                        candidates.append((float(cost), ida, idb))
+                        candidates.append((float(cost), float(pixel_dist), ida, idb))
 
             # Greedy solve: smallest cost first, avoid conflicts
             candidates.sort(key=lambda x: x[0])
             used_src: set = set()
             used_dst: set = set()
             planned_merges: List[Tuple[str, str, float]] = []
-            for cost, a, b in candidates:
+            for cost, pixel_dist, a, b in candidates:
                 if a in used_src or b in used_dst:
                     continue
-                planned_merges.append((a, b, cost))
+                planned_merges.append((a, b, cost, pixel_dist))
                 used_src.add(a)
                 used_dst.add(b)
 
@@ -153,13 +160,13 @@ class SCTTrackbase:
                 break
 
             # Apply merges
-            for a, b, cost in planned_merges:
+            for a, b, cost, pixel_dist in planned_merges:
                 if a not in self.data.cameras[stream_id].tracklets or b not in self.data.cameras[stream_id].tracklets:
                     continue
                 # Merge b into a (a is the earlier tracklet)
                 self._merge_tracklets(stream_id, a, b)
                 self.logger.info(
-                    f"[SCT merge] stream={stream_id} {a} <- {b} | cost={cost:.4f}|  frame_gap={frame_gap} | ecuclidean={self._euclidean(exit_point[ida], entry_point[idb]):.4f}"
+                    f"[SCT merge] stream={stream_id} {a} <- {b} | cost={cost:.4f}|  frame_gap={frame_gap} | ecuclidean={pixel_dist:.4f}"
                 )
                 merged_any = True
 
@@ -183,7 +190,29 @@ class SCTTrackbase:
 
             if self.config.sct_merging_config.static_filter:
                 # Check if the tracklet is static
-                if len(tracklet.detections_info) >= 100:
+                if len(tracklet.detections_info) >= 30 and (tracklet.status != TrackletStatus.ACTIVE):
+                    first_det = min(tracklet.detections_info, key=lambda d: d.frame_id)
+                    last_det = max(tracklet.detections_info, key=lambda d: d.frame_id)
+                    dist_moved = self._euclidean(self._center_abs(first_det, stream_id), self._center_abs(last_det, stream_id))
+                    if dist_moved < 40:
+                        remove_list.append(track_id)
+
+        for track_id in remove_list:
+            del self.data.cameras[stream_id].tracklets[track_id]
+            self.logger.info(f"Tracklet {track_id} in stream {stream_id} is considered static and removed.")
+
+    def _status_update_final(self, stream_id: str):
+        current_time = time.time_ns()
+        remove_list = []
+        
+        # Update the status of the tracklets in SCTTrackbase
+        for track_id, tracklet in self.data.cameras[stream_id].tracklets.items():
+            if tracklet.status != TrackletStatus.COMPLETED:
+                tracklet.status = TrackletStatus.COMPLETED
+
+            if self.config.sct_merging_config.static_filter:
+                # Check if the tracklet is static
+                if len(tracklet.detections_info) >= 80:
                     first_det = min(tracklet.detections_info, key=lambda d: d.frame_id)
                     last_det = max(tracklet.detections_info, key=lambda d: d.frame_id)
                     dist_moved = self._euclidean(self._center_abs(first_det, stream_id), self._center_abs(last_det, stream_id))
@@ -192,7 +221,7 @@ class SCTTrackbase:
 
         for track_id in remove_list:
             del self.data.cameras[stream_id].tracklets[track_id]
-            self.logger.info(f"Tracklet {track_id} in stream {stream_id} is considered static and removed, distance moved: {dist_moved:.2f} pixels")
+            self.logger.info(f"Tracklet {track_id} in stream {stream_id} is considered static and removed.")
 
     def _push_completed_tracklets(self, stream_id: str) -> Dict[str,Tracklet]:
         # Push completed tracklets to the MCTTrackbase and remove them from SCTTrackbase
@@ -306,7 +335,8 @@ class SCTTrackbase:
         t1.zone.exit_zone_id = exit_zone_id
         t1.zone.entry_zone_type = entry_zone_cls
         t1.zone.exit_zone_type = exit_zone_cls
-        t1.status = self._default_status(entry_zone_cls, exit_zone_cls)
+        # t1.status = self._default_status(entry_zone_cls, exit_zone_cls)
+        t1.status = TrackletStatus.SEARCHING
 
         # refresh end_time
         t1.end_time = time.time_ns()
@@ -387,7 +417,7 @@ class SCTTrackbase:
         else:
             return TrackletStatus.ACTIVE
         
-    def _is_point_in_bbox(self, point, bbox, orig_size=(3840, 2160), new_size=(2560, 1440), margin=20):
+    def _is_point_in_bbox(self, point, bbox, orig_size=(3840, 2160), new_size=(2560, 1440), margin=50):
         """
         Check if a point lies inside a bbox (with margin), 
         scaling bbox from orig_size to new_size if needed.
