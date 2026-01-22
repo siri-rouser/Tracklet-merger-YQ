@@ -6,13 +6,13 @@ redis:
   input_stream_prefix: JetsonOrin
   output_stream_prefix: trackletmerger
 prometheus_port: 8000
-save_directory: './results'
+save_directory: './cityflow_results'
 refresh_interval: 10000 # in millsecond, 10s
 last_process_interval: 60000 # in millsecond, 60s
-last_processing_frame: 8847
+last_processing_frame: 1991
 
 sct_merging_config:
-  max_frame_gap: 60
+  max_frame_gap: 30
   max_pixel_distance_ratio: 0.25 # less than 1
   cosine_threshold: 0.2
   static_filter: True
@@ -23,29 +23,35 @@ merging_config:
     - stream2
     - stream3
     - stream4
+    - stream5
+    - stream6
   original_img_size:
-    stream1: [2560, 1440]
-    stream2: [2560, 1440]
-    stream3: [2560, 1440]
-    stream4: [2560, 1440]
+    stream1: [1280, 960]
+    stream2: [1280, 960]
+    stream3: [1280, 960]
+    stream4: [1280, 960]
+    stream5: [1280, 720]
+    stream6: [1280, 720]
   zone_data:
-    stream1: '/home/yuqiang/yl4300/project/MCVT_YQ/datasets/algorithm_results/detect_merge/imagesc001/imagesc001_zone_data_processed.json'
-    stream2: '/home/yuqiang/yl4300/project/MCVT_YQ/datasets/algorithm_results/detect_merge/imagesc002/imagesc002_zone_data_processed.json'
-    stream3: '/home/yuqiang/yl4300/project/MCVT_YQ/datasets/algorithm_results/detect_merge/imagesc003/imagesc003_zone_data_processed.json'
-    stream4: '/home/yuqiang/yl4300/project/MCVT_YQ/datasets/algorithm_results/detect_merge/imagesc004/imagesc004_zone_data_processed.json'
+    stream1: '/home/yuqiang/yl4300/project/MCVT_YQ/datasets/algorithm_results/detect_merge/c041/c041_zone_data_processed.json'
+    stream2: '/home/yuqiang/yl4300/project/MCVT_YQ/datasets/algorithm_results/detect_merge/c042/c042_zone_data_processed.json'
+    stream3: '/home/yuqiang/yl4300/project/MCVT_YQ/datasets/algorithm_results/detect_merge/c043/c043_zone_data_processed.json'
+    stream4: '/home/yuqiang/yl4300/project/MCVT_YQ/datasets/algorithm_results/detect_merge/c044/c044_zone_data_processed.json'
+    stream5: '/home/yuqiang/yl4300/project/MCVT_YQ/datasets/algorithm_results/detect_merge/c045/c045_zone_data_processed.json'
+    stream6: '/home/yuqiang/yl4300/project/MCVT_YQ/datasets/algorithm_results/detect_merge/c046/c046_zone_data_processed.json'
   output_stream_id: merger
   matching_metric: Cosine_Distance
-  dis_thre: 0.4 # threshold for the distance metric(default cosine distance)
-  dis_remove: 0.4 # threshold for the distance metric for hard remove the tracklet pair
+  dis_thre: 0.62 # threshold for the distance metric(default cosine distance)
+  dis_remove: 0.65 # threshold for the distance metric for hard remove the tracklet pair
   dis_alpha: 1 # alpha is for the apperance distance metric
-  dis_beta: 5 # beta is for the temporal spatial metric
+  dis_beta: 0.5 # beta is for the temporal spatial metric
   searching_time: 300 # in millonsecond, for SCT merging, the searching time is the time window for searching the tracklet in the ego camera
-  lost_time: 25000 # in millonsecond, for SCT merging, the lost time is the time window for the tracklet to be considered as lost
+  lost_time: 20000 # in millonsecond, for SCT merging, the lost time is the time window for the tracklet to be considered as lost
   is_clm: True # whether to use camera link model for cross-camera matching
-  clm_path: 'cam_pair.json' # path to the camera pair json file (The result for camera link model)
-  clm_bandwidth: 5 # bandwidth for the kernel density estimation in CLM
-  kde_threshold: 1e-4 # threshold for the kernel density estimation in CLM
-  frame_window: 3000 # for MCT merging, the frame window is the time window for matching tracklets in different cameras
+  clm_path: 'cam_pair_cityflow.json' # path to the camera pair json file (The result for camera link model)
+  clm_bandwidth: 10 # bandwidth for the kernel density estimation in CLM
+  kde_threshold: 1e-5 # threshold for the kernel density estimation in CLM
+  frame_window: 2001 # for MCT merging, the frame window is the time window for matching tracklets in different cameras
   overlap_frames: 1500 # for MCT merging, the overlap frames is the number of frames to overlap between two cameras
   matching_algorithm: Hungarian # Matching algorithm: Greedy or Hungarian
 
@@ -53,3 +59,5 @@ merging_config:
     - [stream1, stream2]
     - [stream2, stream3]
     - [stream3, stream4]
+    - [stream4, stream5]
+    - [stream5, stream6]

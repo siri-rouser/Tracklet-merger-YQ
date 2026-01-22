@@ -93,7 +93,7 @@ class CostMatrix:
 class ReIDCalculator:
     def __init__(self, logger: logging, dis_thre=0.7, dis_remove=0.9, dis_alpha=1.0, dis_beta=1.0, kde_threshold = 5e-4, clm:Dict[str, Dict[str, KernelDensity]] = None):
         self.logger = logger
-        self.clm = clm
+        self.clm = clm # clm can be None
         self.kde_threshold = kde_threshold
         self.dis_thre = dis_thre
         self.dis_remove = dis_remove
@@ -102,17 +102,18 @@ class ReIDCalculator:
 
     def _kde_filter(self, dismat, index, orders, q_time, g_times,q_cam_id, g_cam_ids):
         directions = []
+        # NOTE: Add 4 before cam_id to match the CLM keys for cityflow dataset.
         for order in orders:
             if (q_time[0] - g_times[order][1]) > 0: # g --> q g_exit and q_entry
-                trans_time = (q_time[0] - g_times[order][1]) / 15 # 15 is the fps
-                kde = self.clm[f"{q_cam_id}_to_{g_cam_ids[order]}"]['kde']
-                directions.append(f'{q_cam_id}_to_{g_cam_ids[order]}') # camx_entry_to_camx_exit, q_time > g_time
+                trans_time = (q_time[0] - g_times[order][1]) / 10 # 15 is the fps
+                kde = self.clm[f"4{q_cam_id}_to_4{g_cam_ids[order]}"]['kde']
+                directions.append(f'4{q_cam_id}_to_4{g_cam_ids[order]}') # camx_entry_to_camx_exit, q_time > g_time
                 pdf = np.exp(kde.score_samples(np.array(trans_time).reshape(-1, 1)))
 
             elif (g_times[order][0] - q_time[1]) > 0: # q --> g q_exit and g_entry
-                trans_time = (g_times[order][0] - q_time[1]) / 15
-                kde = self.clm[f"{g_cam_ids[order]}_to_{q_cam_id}"]['kde']
-                directions.append(f'{g_cam_ids[order]}_to_{q_cam_id}') # q_exit_to_g_entry
+                trans_time = (g_times[order][0] - q_time[1]) / 10
+                kde = self.clm[f"4{g_cam_ids[order]}_to_4{q_cam_id}"]['kde']
+                directions.append(f'4{g_cam_ids[order]}_to_4{q_cam_id}') # q_exit_to_g_entry
                 pdf = np.exp(kde.score_samples(np.array(trans_time).reshape(-1, 1)))
             else:
                 self.logger.debug(f"Tracklets {q_cam_id} and {g_cam_ids[order]} have overlapping times, skipping KDE adjustment")
@@ -142,15 +143,15 @@ class ReIDCalculator:
             entry_zone_gt:int
             exit_zone_gt:int
             entry_zone_gt, exit_zone_gt = (self.clm[direction]['entry_exit_pair'][0],self.clm[direction]['entry_exit_pair'][1]) # e.g. {'1_to_2': {'entry_exit_pair': [0,4], 'time_pair': [[0, 100]]}}
-            
-            if entry_cam == str(q_cam_id) and exit_cam == str(g_cam_ids[ord]):
+
+            if entry_cam == ('4'+str(q_cam_id)) and exit_cam == ('4'+str(g_cam_ids[ord])):
                 # q_entry_zn is the entry zone for query tracklet, g_entry_zn is the entry zone for gallery tracklet
                 if (q_entry_zn[0] != entry_zone_gt and q_entry_zn[1] == ZoneStatus.ENTRY) or (g_exit_zn[ord][0] != exit_zone_gt and g_exit_zn[ord][1] == ZoneStatus.EXIT):
                     zone_remove.append(True)
                     self.logger.debug(f"Removing tracklet entry:{q_cam_id} to exit:{g_cam_ids[ord]} due to zone mismatch")
                 else:
                     zone_remove.append(False)
-            elif entry_cam == str(g_cam_ids[ord]) and exit_cam == str(q_cam_id):
+            elif entry_cam == ('4'+str(g_cam_ids[ord])) and exit_cam == ('4'+str(q_cam_id)):
                 if (g_entry_zn[ord][0] != entry_zone_gt and g_entry_zn[ord][1] == ZoneStatus.ENTRY) or (q_exit_zn[0] != exit_zone_gt and q_exit_zn[1] == ZoneStatus.EXIT):
                     zone_remove.append(True)
                     self.logger.debug(f"Removing tracklet entry:{g_cam_ids[ord]} to exit:{q_cam_id} due to zone mismatch")
@@ -188,9 +189,9 @@ class ReIDCalculator:
             order    = indices[row]
 
             if self.clm is None:
-                if not warned_clm:
+                if warned_clm:
                     self.logger.warning("Camera link model not found; skipping KDE time prior.")
-                    warned_clm = True
+
                 # Filter: same-cam or > threshold -> remove
                 remove = (g_cam_ids[order] == q_cam_id) | (dismat[row][order] > self.dis_thre)
             else:
@@ -271,18 +272,18 @@ class ReIDCalculator:
         indices = np.argsort(dismat, axis=1)           # (Q, G) per-row column orderings
         valid_mask = np.zeros_like(dismat, dtype=bool) # True where pair survives filters
 
-        warned_clm = False
+        warned_clm = False # enable no_clm warning. if True, give a warning if no clm found
 
         # ---------- 1) Per-row filtering to fill valid_mask (and update dismat via KDE) ----------
         for row, q_track_id in enumerate(q_track_ids):
-            q_cam_id = q_cam_ids[row]
+            q_cam_id = q_cam_ids[row] # in cityflow, cam_id is 1,2,3,4,5,6 rather than 41,42,...
             q_time   = q_times[row]
             order    = indices[row]
 
             if self.clm is None:
-                if not warned_clm:
+                if warned_clm:
                     self.logger.warning("Camera link model not found; skipping KDE time prior.")
-                    warned_clm = True
+
                 # Filter: same-cam or > threshold -> remove
                 remove = (g_cam_ids[order] == q_cam_id) | (dismat[row][order] > self.dis_thre)
             else:

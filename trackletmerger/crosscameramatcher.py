@@ -31,7 +31,6 @@ class CrossCameraMatcher:
 
         '''
 
-
         if not hasattr(self, 'global_reid_dict'):
             self.global_reid_dict = {}
             self.global_id_counter = 0
@@ -40,6 +39,7 @@ class CrossCameraMatcher:
         for cam_a, cam_b in self.camera_pairs:
             # NOTE: in here, e.g. cam_a=stream1, cam_b=stream2
             if cam_a not in candidate_tracklets or cam_b not in candidate_tracklets:
+                self.logger.warning(f"Missing candidate tracklets for camera pair: {cam_a}, {cam_b}")
                 continue
 
             tracklets_b_dict:Dict[str, Tracklet] = {}
@@ -73,7 +73,6 @@ class CrossCameraMatcher:
         self.logger.info(f"Final global reid dict:")
         self.logger.info(self.global_reid_dict)
         return self.global_reid_dict
-        
 
     def _CLM_setup(self):
         '''
@@ -137,7 +136,6 @@ class CrossCameraMatcher:
             return self.global_reid_dict
         
         cam_a, cam_b = camera_pair
-        
         
         # Process each match to assign global IDs
         for cam_id, track_id, matched_cam_id, matched_track_id, distance in matches:

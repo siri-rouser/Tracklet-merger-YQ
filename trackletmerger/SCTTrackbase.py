@@ -33,7 +33,7 @@ class SCTTrackbase:
         self._status_update(stream_id)
 
         # process the SCTTrackbase
-        self._process(stream_id)
+        self._sct_rematch_process(stream_id)
 
         completed_tracklets = self._push_completed_tracklets(stream_id)
 
@@ -69,7 +69,7 @@ class SCTTrackbase:
             self.data.cameras[stream_id].tracklets[track_id].status = TrackletStatus.ACTIVE
             self._process_flag = True
 
-    def _process(self,stream_id: str):
+    def _sct_rematch_process(self,stream_id: str):
         if (stream_id not in self.data.cameras or len(self.data.cameras[stream_id].tracklets) < 2 or not self._process_flag):
             self.logger.debug(f"Skip processing for stream {stream_id}. Not enough tracklets or no new data.")
             return
@@ -224,7 +224,7 @@ class SCTTrackbase:
             self.logger.info(f"Tracklet {track_id} in stream {stream_id} is considered static and removed.")
 
     def _push_completed_tracklets(self, stream_id: str) -> Dict[str,Tracklet]:
-        # Push completed tracklets to the MCTTrackbase and remove them from SCTTrackbase
+        # Push completed tracklets to the MCTTrackbase and remove them from SCTTrackbase to reduce cache memory
         completed_tracklets:Dict[str,Tracklet] = {}
         removed_tracklets = []
         if stream_id not in self.data.cameras:
@@ -395,16 +395,17 @@ class SCTTrackbase:
 
         entry_point = bbox_center_xyxy(entry_det.bounding_box)
         exit_point  = bbox_center_xyxy(exit_det.bounding_box)
+        print( f"entry_point: {entry_point}, exit_point: {exit_point}" )
 
         for zone in self.zone_data[stream_id].values():
             if zone['zone_cls'] == 'entry_zone':
-                if self._is_point_in_bbox(entry_point,zone['rect_area'],orig_size=(3840, 2160), new_size=(self.config.merging_config.original_img_size[stream_id][0], self.config.merging_config.original_img_size[stream_id][1])):
+                if self._is_point_in_bbox_cityflow(entry_point,zone['rect_area']):
                     entry_zone_id = int(zone['zone_id'])
                     entry_zone_cls = ZoneStatus.ENTRY if zone['zone_cls'] == 'entry_zone' else (
                         ZoneStatus.EXIT if zone['zone_cls'] == 'exit_zone' else ZoneStatus.UNDEFINED)
-
+                    
             if zone['zone_cls'] == 'exit_zone':
-                if self._is_point_in_bbox(exit_point,zone['rect_area'],orig_size=(3840, 2160), new_size=(self.config.merging_config.original_img_size[stream_id][0], self.config.merging_config.original_img_size[stream_id][1])):
+                if self._is_point_in_bbox_cityflow(exit_point,zone['rect_area']):
                     exit_zone_id = int(zone['zone_id'])
                     exit_zone_cls = ZoneStatus.ENTRY if zone['zone_cls'] == 'entry_zone' else (
                         ZoneStatus.EXIT if zone['zone_cls'] == 'exit_zone' else ZoneStatus.UNDEFINED)
@@ -438,3 +439,14 @@ class SCTTrackbase:
         # check with margin
         return (max(0, x1 - margin) <= x <= min(new_size[0], x2 + margin)) and \
             (max(0, y1 - margin) <= y <= min(new_size[1], y2 + margin))
+    
+    def _is_point_in_bbox_cityflow(self, point, bbox, margin=50):
+        """
+        Check if a point lies inside a polygon using the ray-casting algorithm.
+        """
+        x, y = point
+        x1, y1, x2, y2 = bbox
+
+        # check with margin
+        return (max(0, x1 - margin) <= x <= min(1280, x2 + margin)) and \
+            (max(0, y1 - margin) <= y <= min(960, y2 + margin))

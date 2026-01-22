@@ -47,11 +47,13 @@ class MCTTrackbase:
 
         self.logger.info(f"Current max frame: {current_max_frame}, Last processed frame: {self.last_processed_frame} -------------------------")
 
+        # No process needed in the self.frame_window or not last_process_trigger
         if ((current_max_frame - self.last_processed_frame) < self.config.merging_config.frame_window) and (not last_process_trigger):
             return
         
         start_frame = max(0, self.last_processed_frame)
         end_frame = current_max_frame
+        
         # 0) Append new tracklets under lock
         with self._state_lock:
             # Snapshot candidates under lock; list/dicts are local copies

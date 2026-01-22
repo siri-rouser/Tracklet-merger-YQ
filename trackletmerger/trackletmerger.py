@@ -64,6 +64,7 @@ class TrackletMerger:
             try:
                 # Single-Camera processing
                 if self.last_process_trigger:
+                    # Put all tracklets in memeory into Status.COMPLETE for final processing
                     for stream_id in self._sct_queues.keys():
                         tracklets_dict = self.sct_trackbase.sct_final_process(stream_id)
                         self.mct_trackbase.append(tracklets_dict,stream_id)
@@ -72,7 +73,6 @@ class TrackletMerger:
                     self.mct_trackbase.append(tracklets_dict, stream_id)
 
                 # Cross-camera processing (thread-safe; see MCT patch below)
-                
                 self.mct_trackbase.process_async(self.last_process_trigger)
 
                 if self.last_process_trigger:
@@ -83,8 +83,6 @@ class TrackletMerger:
             finally:
                 q.task_done() # tell the queue we're done with that item
 
-
-
     # (optional) call this on shutdown
     def stop(self):
         self._stop_event.set()
@@ -94,6 +92,7 @@ class TrackletMerger:
         current_time = time.time_ns()
 
         if (current_time - self.last_processed_time) / 1e6 > self._config.last_process_interval:
+            # 如果它没有收到信号 in self.last_processed_interval, 则触发最后一次处理-> Close the program after this.
             logger.warning('The last processing, program exit after processing ...')
             self.last_process_trigger = True
             stream_id = 'stream1'
