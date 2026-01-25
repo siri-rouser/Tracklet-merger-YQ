@@ -33,7 +33,8 @@ class SCTTrackbase:
         self._status_update(stream_id)
 
         # process the SCTTrackbase
-        self._process(stream_id)
+        if self.config.sct_merging_config.enable_sct_rematch:
+            self._sct_rematch_process(stream_id)
 
         completed_tracklets = self._push_completed_tracklets(stream_id)
 
@@ -69,7 +70,7 @@ class SCTTrackbase:
             self.data.cameras[stream_id].tracklets[track_id].status = TrackletStatus.ACTIVE
             self._process_flag = True
 
-    def _process(self,stream_id: str):
+    def _sct_rematch_process(self,stream_id: str):
         if (stream_id not in self.data.cameras or len(self.data.cameras[stream_id].tracklets) < 2 or not self._process_flag):
             self.logger.debug(f"Skip processing for stream {stream_id}. Not enough tracklets or no new data.")
             return

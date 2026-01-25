@@ -39,6 +39,7 @@ class MergingConfig(BaseModel):
     matching_algorithm: str = 'Greedy'  # Matching algorithm: Greedy or Hungarian
 
 class SCTMergingConfig(BaseModel):
+    enable_sct_rematch:  bool = True
     max_frame_gap: int = 100
     max_pixel_distance_ratio: float = 0.25
     cosine_threshold: float = 0.1
@@ -54,7 +55,6 @@ class TrackletMergerConfig(BaseSettings):
     refresh_interval: int = 10000  # in milliseconds, default is 10 seconds
     last_process_interval: int = 20000  # in milliseconds, default is 20 seconds
     last_processing_frame: int = 8900  # default is 8900
-    
 
     model_config = SettingsConfigDict(env_nested_delimiter='__')
 

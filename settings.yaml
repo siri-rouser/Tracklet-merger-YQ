@@ -9,9 +9,10 @@ prometheus_port: 8000
 save_directory: './results'
 refresh_interval: 10000 # in millsecond, 10s
 last_process_interval: 60000 # in millsecond, 60s
-last_processing_frame: 8847
+last_processing_frame: 8919
 
 sct_merging_config:
+  enable_sct_rematch: True
   max_frame_gap: 60
   max_pixel_distance_ratio: 0.25 # less than 1
   cosine_threshold: 0.2
@@ -38,13 +39,13 @@ merging_config:
   dis_thre: 0.4 # threshold for the distance metric(default cosine distance)
   dis_remove: 0.4 # threshold for the distance metric for hard remove the tracklet pair
   dis_alpha: 1 # alpha is for the apperance distance metric
-  dis_beta: 5 # beta is for the temporal spatial metric
+  dis_beta: 1 # beta is for the temporal spatial metric
   searching_time: 300 # in millonsecond, for SCT merging, the searching time is the time window for searching the tracklet in the ego camera
   lost_time: 25000 # in millonsecond, for SCT merging, the lost time is the time window for the tracklet to be considered as lost
-  is_clm: True # whether to use camera link model for cross-camera matching
+  is_clm: False # whether to use camera link model for cross-camera matching
   clm_path: 'cam_pair.json' # path to the camera pair json file (The result for camera link model)
   clm_bandwidth: 5 # bandwidth for the kernel density estimation in CLM
-  kde_threshold: 1e-4 # threshold for the kernel density estimation in CLM
+  kde_threshold: 5e-5 # threshold for the kernel density estimation in CLM
   frame_window: 3000 # for MCT merging, the frame window is the time window for matching tracklets in different cameras
   overlap_frames: 1500 # for MCT merging, the overlap frames is the number of frames to overlap between two cameras
   matching_algorithm: Hungarian # Matching algorithm: Greedy or Hungarian

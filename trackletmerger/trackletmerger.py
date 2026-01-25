@@ -42,7 +42,7 @@ class TrackletMerger:
     def __call__(self, stream_id: str, input_proto: bytes = None) -> Any:
         return self.get(stream_id, input_proto)
     
-    def _ensure_worker(self, stream_id: str, max_qsize: int = 64) -> None:
+    def _ensure_worker(self, stream_id: str, max_qsize: int = 128) -> None:
         if stream_id in self._sct_threads:
             return
         q = queue.Queue(maxsize=max_qsize)
