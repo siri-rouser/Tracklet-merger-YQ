@@ -40,8 +40,8 @@ class MergingConfig(BaseModel):
 
 class SCTMergingConfig(BaseModel):
     enable_sct_rematch:  bool = True
-    max_frame_gap: int = 100
-    max_pixel_distance_ratio: float = 0.25
+    max_frame_gap: int = 45
+    max_pixel_distance_ratio: float = 0.2
     cosine_threshold: float = 0.1
     static_filter: bool = True
 

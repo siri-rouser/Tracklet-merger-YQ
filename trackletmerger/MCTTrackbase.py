@@ -2,6 +2,7 @@ import numpy as np
 import logging
 import threading
 import cv2
+import time
 from math import sqrt
 from pathlib import Path
 from .config import TrackletMergerConfig
@@ -48,7 +49,7 @@ class MCTTrackbase:
         self.logger.info(f"Current max frame: {current_max_frame}, Last processed frame: {self.last_processed_frame} -------------------------")
 
         if ((current_max_frame - self.last_processed_frame) < self.config.merging_config.frame_window) and (not last_process_trigger):
-            return
+            return None
         
         start_frame = max(0, self.last_processed_frame)
         end_frame = current_max_frame
@@ -60,7 +61,7 @@ class MCTTrackbase:
         # Heavy work (no lock)
         if len(candidate_tracklets) < 2:
             self.logger.debug("Not enough tracklets for cross-camera matching")
-            return
+            return None
 
         self.logger.info(f"Starting cross-camera processing at frame {current_max_frame}")
         reid_dict = self.matcher.match(candidate_tracklets, start_frame, end_frame)
@@ -78,6 +79,8 @@ class MCTTrackbase:
             self._cleanup_old_tracklets(start_frame - self.overlap_frames)
 
             self.logger.info(f"Completed processing window [{start_frame}, {end_frame}]")
+
+        return time.time_ns()
 
 
     def _get_current_max_frame_locked(self) -> int:

@@ -29,6 +29,8 @@ PROTO_DESERIALIZATION_DURATION = Summary('my_stage_proto_deserialization_duratio
 class TrackletMerger:
     def __init__(self, config: TrackletMergerConfig, log_level: LogLevel) -> None:
         self._config = config
+        self.first_msg_time = None
+        self.mct_last_process_time = None
         self.last_process_trigger = False
         logger.setLevel(log_level.value)
         self.sct_trackbase = SCTTrackbase(logger, config)
@@ -73,7 +75,10 @@ class TrackletMerger:
 
                 # Cross-camera processing (thread-safe; see MCT patch below)
                 
-                self.mct_trackbase.process_async(self.last_process_trigger)
+                flag_time = self.mct_trackbase.process_async(self.last_process_trigger)
+                if flag_time is not None:
+                    self.mct_last_process_time = flag_time
+                    print("Central Server E2E Latency (ms): ", (self.mct_last_process_time - self.first_msg_time)/1e6)
 
                 if self.last_process_trigger:
                     self._stop_event.set()
@@ -92,6 +97,8 @@ class TrackletMerger:
     @GET_DURATION.time()
     def get(self, stream_id:str, input_proto:bytes = None) -> bytes:
         current_time = time.time_ns()
+        if self.first_msg_time is None:
+            self.first_msg_time = current_time
 
         if (current_time - self.last_processed_time) / 1e6 > self._config.last_process_interval:
             logger.warning('The last processing, program exit after processing ...')

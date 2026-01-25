@@ -181,21 +181,21 @@ class SCTTrackbase:
         # Update the status of the tracklets in SCTTrackbase
         for track_id, tracklet in self.data.cameras[stream_id].tracklets.items():
             time_since_end = (current_time - tracklet.end_time) // 1_000_000  # in milliseconds
-            if time_since_end > self.config.merging_config.searching_time and tracklet.status == TrackletStatus.ACTIVE:
+            if time_since_end > self.config.merging_config.searching_time and tracklet.status is TrackletStatus.ACTIVE:
                 tracklet.status = TrackletStatus.SEARCHING
-                self.logger.info(f"Tracklet {track_id} in stream {stream_id} is now searching, time since received: {time_since_end} ms")
+                self.logger.debug(f"Tracklet {track_id} in stream {stream_id} is now searching, time since received: {time_since_end} ms")
             
-            if time_since_end > self.config.merging_config.lost_time and tracklet.status == TrackletStatus.SEARCHING:
+            if time_since_end > self.config.merging_config.lost_time and tracklet.status is TrackletStatus.SEARCHING:
                 tracklet.status = TrackletStatus.COMPLETED
-                self.logger.info(f"Tracklet {track_id} in stream {stream_id} is now completed, time since received: {time_since_end} ms")
+                self.logger.debug(f"Tracklet {track_id} in stream {stream_id} is now completed, time since received: {time_since_end} ms")
 
             if self.config.sct_merging_config.static_filter:
                 # Check if the tracklet is static
-                if len(tracklet.detections_info) >= 30 and (tracklet.status != TrackletStatus.ACTIVE):
+                if len(tracklet.detections_info) >= 60 and (tracklet.status is not TrackletStatus.ACTIVE):
                     first_det = min(tracklet.detections_info, key=lambda d: d.frame_id)
                     last_det = max(tracklet.detections_info, key=lambda d: d.frame_id)
                     dist_moved = self._euclidean(self._center_abs(first_det, stream_id), self._center_abs(last_det, stream_id))
-                    if dist_moved < 40:
+                    if dist_moved < 50:
                         remove_list.append(track_id)
 
         for track_id in remove_list:
@@ -213,7 +213,7 @@ class SCTTrackbase:
 
             if self.config.sct_merging_config.static_filter:
                 # Check if the tracklet is static
-                if len(tracklet.detections_info) >= 80:
+                if len(tracklet.detections_info) >= 60:
                     first_det = min(tracklet.detections_info, key=lambda d: d.frame_id)
                     last_det = max(tracklet.detections_info, key=lambda d: d.frame_id)
                     dist_moved = self._euclidean(self._center_abs(first_det, stream_id), self._center_abs(last_det, stream_id))
@@ -233,7 +233,7 @@ class SCTTrackbase:
             return completed_tracklets
         
         for track_id, tracklet in self.data.cameras[stream_id].tracklets.items():
-            if tracklet.status == TrackletStatus.COMPLETED:
+            if tracklet.status is TrackletStatus.COMPLETED:
                 completed_tracklets[track_id]=tracklet
                 self.logger.info(f"Pushing completed tracklet {track_id} from stream {stream_id} to MCTTrackbase.")
                 # Remove the completed tracklet from SCTTrackbase
@@ -413,7 +413,7 @@ class SCTTrackbase:
         return entry_zone_id, exit_zone_id, entry_zone_cls, exit_zone_cls
     
     def _default_status(self, entry_zone_cls, exit_zone_cls) -> TrackletStatus:
-        if entry_zone_cls == ZoneStatus.ENTRY and exit_zone_cls == ZoneStatus.EXIT:
+        if entry_zone_cls is ZoneStatus.ENTRY and exit_zone_cls is ZoneStatus.EXIT:
             return TrackletStatus.COMPLETED
         else:
             return TrackletStatus.ACTIVE

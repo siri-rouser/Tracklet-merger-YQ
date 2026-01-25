@@ -1,4 +1,4 @@
-log_level: INFO
+log_level: WARNING
 redis:
   host: localhost
   port: 6379
@@ -13,8 +13,8 @@ last_processing_frame: 8919
 
 sct_merging_config:
   enable_sct_rematch: True
-  max_frame_gap: 60
-  max_pixel_distance_ratio: 0.25 # less than 1
+  max_frame_gap: 45
+  max_pixel_distance_ratio: 0.2 # less than 1
   cosine_threshold: 0.2
   static_filter: True
 
@@ -39,16 +39,16 @@ merging_config:
   dis_thre: 0.4 # threshold for the distance metric(default cosine distance)
   dis_remove: 0.4 # threshold for the distance metric for hard remove the tracklet pair
   dis_alpha: 1 # alpha is for the apperance distance metric
-  dis_beta: 1 # beta is for the temporal spatial metric
+  dis_beta: 0.8 # beta is for the temporal spatial metric
   searching_time: 300 # in millonsecond, for SCT merging, the searching time is the time window for searching the tracklet in the ego camera
-  lost_time: 25000 # in millonsecond, for SCT merging, the lost time is the time window for the tracklet to be considered as lost
-  is_clm: False # whether to use camera link model for cross-camera matching
+  lost_time: 35000 # in millonsecond, for SCT merging, the lost time is the time window for the tracklet to be considered as lost
+  is_clm: True # whether to use camera link model for cross-camera matching
   clm_path: 'cam_pair.json' # path to the camera pair json file (The result for camera link model)
   clm_bandwidth: 5 # bandwidth for the kernel density estimation in CLM
-  kde_threshold: 5e-5 # threshold for the kernel density estimation in CLM
-  frame_window: 3000 # for MCT merging, the frame window is the time window for matching tracklets in different cameras
+  kde_threshold: 5e-4 # threshold for the kernel density estimation in CLM
+  frame_window: 2500 # for MCT merging, the frame window is the time window for matching tracklets in different cameras
   overlap_frames: 1500 # for MCT merging, the overlap frames is the number of frames to overlap between two cameras
-  matching_algorithm: Hungarian # Matching algorithm: Greedy or Hungarian
+  matching_algorithm: Greedy # Matching algorithm: Greedy or Hungarian
 
   camera_pairs: 
     - [stream1, stream2]
