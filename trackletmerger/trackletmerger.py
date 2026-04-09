@@ -40,6 +40,7 @@ class TrackletMerger:
         self._sct_queues: dict[str, queue.Queue] = {}
         self._sct_threads: dict[str, threading.Thread] = {}
         self._stop_event = threading.Event()
+        self.q_size_list = []
 
     def __call__(self, stream_id: str, input_proto: bytes = None) -> Any:
         return self.get(stream_id, input_proto)
@@ -116,6 +117,7 @@ class TrackletMerger:
         # ENSURE worker and enqueue quickly (non-blocking; drop oldest if full)
         self._ensure_worker(stream_id)
         q = self._sct_queues[stream_id]
+        self.q_size_list.append(q.qsize())
         try:
             q.put_nowait(sae_msg)
         except queue.Full:
@@ -147,3 +149,14 @@ class TrackletMerger:
     @PROTO_SERIALIZATION_DURATION.time()
     def _create_output(self, stream_id, inference_time_us, input_sae_msg:SaeMessage):
         out_sae_msg = SaeMessage()
+
+    def get_results(self):
+        max_q_size = max(self.q_size_list) if self.q_size_list else 0
+        avg_q_size = sum(self.q_size_list) / len(self.q_size_list) if self.q_size_list else 0
+        print(f"max SCT queue size: {max_q_size}, avg SCT queue size: {avg_q_size:.2f}")
+        
+        # Save the q_size_list to a file
+        save_path = self._config.save_directory / 'queue_sizes.json'
+        with open(save_path, 'w') as f:
+            json.dump(self.q_size_list, f)
+        print(f"Queue sizes saved to {save_path} ({len(self.q_size_list)} entries)")

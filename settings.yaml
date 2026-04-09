@@ -1,4 +1,4 @@
-log_level: WARNING
+log_level: INFO
 redis:
   host: localhost
   port: 6379
@@ -24,16 +24,22 @@ merging_config:
     - stream2
     - stream3
     - stream4
+    # - stream5
+    # - stream6
   original_img_size:
     stream1: [2560, 1440]
     stream2: [2560, 1440]
     stream3: [2560, 1440]
     stream4: [2560, 1440]
+    stream5: [2560, 1440]
+    stream6: [2560, 1440]
   zone_data:
     stream1: '/home/yuqiang/yl4300/project/MCVT_YQ/datasets/algorithm_results/detect_merge/imagesc001/imagesc001_zone_data_processed.json'
     stream2: '/home/yuqiang/yl4300/project/MCVT_YQ/datasets/algorithm_results/detect_merge/imagesc002/imagesc002_zone_data_processed.json'
     stream3: '/home/yuqiang/yl4300/project/MCVT_YQ/datasets/algorithm_results/detect_merge/imagesc003/imagesc003_zone_data_processed.json'
     stream4: '/home/yuqiang/yl4300/project/MCVT_YQ/datasets/algorithm_results/detect_merge/imagesc004/imagesc004_zone_data_processed.json'
+    stream5: '/home/yuqiang/yl4300/project/MCVT_YQ/datasets/algorithm_results/detect_merge/imagesc001/imagesc001_zone_data_processed.json'
+    stream6: '/home/yuqiang/yl4300/project/MCVT_YQ/datasets/algorithm_results/detect_merge/imagesc002/imagesc002_zone_data_processed.json'
   output_stream_id: merger
   matching_metric: Cosine_Distance
   dis_thre: 0.4 # threshold for the distance metric(default cosine distance)
@@ -54,3 +60,5 @@ merging_config:
     - [stream1, stream2]
     - [stream2, stream3]
     - [stream3, stream4]
+    - [stream4, stream5]
+    - [stream5, stream6]

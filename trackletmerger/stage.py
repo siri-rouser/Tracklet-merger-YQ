@@ -127,6 +127,7 @@ def run_stage():
     def sig_handler(signum, _):
         signame = signal.Signals(signum).name
         print(f'Caught signal {signame} ({signum}). Exiting...')
+        trackletmerger.get_results()
         stop_event.set()
 
     signal.signal(signal.SIGTERM, sig_handler)
