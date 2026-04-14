@@ -7,4 +7,5 @@ cache
 .vscode
 reid_dict.txt
 *.mp4
-results
+*.json
+*.jsonl
