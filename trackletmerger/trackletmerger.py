@@ -89,8 +89,6 @@ class TrackletMerger:
             finally:
                 q.task_done() # tell the queue we're done with that item
 
-
-
     # (optional) call this on shutdown
     def stop(self):
         self._stop_event.set()
@@ -132,7 +130,6 @@ class TrackletMerger:
                 q.put_nowait(sae_msg)
             except queue.Full:
                 logger.warning(f"SCT queue still full; dropping frame for {stream_id}")
-
 
     @PROTO_DESERIALIZATION_DURATION.time()
     def _unpack_proto(self, sae_message_bytes):

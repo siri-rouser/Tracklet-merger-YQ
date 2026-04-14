@@ -133,7 +133,7 @@ class ReIDCalculator:
         '''
         zone_remove = []
         for idx,ord in enumerate(order):
-            direction:str = directions[idx]  # camx_entry_to_camx_exit, entry_time < exit_time
+            direction:str = directions[idx]  # camx_entry_to_camx_exit, entry_time > exit_time
             if direction == 'placehold':
                 zone_remove.append(True)
                 continue

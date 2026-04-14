@@ -28,9 +28,7 @@ class CrossCameraMatcher:
                     "local_matches": [{"matched_camera": int(cam_id), "matched_track_id": int(track_id), "distance": float(dis)}]
                 }
             },
-
         '''
-
 
         if not hasattr(self, 'global_reid_dict'):
             self.global_reid_dict = {}
@@ -73,7 +71,6 @@ class CrossCameraMatcher:
         self.logger.info(f"Final global reid dict:")
         self.logger.info(self.global_reid_dict)
         return self.global_reid_dict
-        
 
     def _CLM_setup(self):
         '''
