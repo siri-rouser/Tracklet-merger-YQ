@@ -9,3 +9,4 @@ reid_dict.txt
 *.mp4
 *.json
 *.jsonl
+.txt
