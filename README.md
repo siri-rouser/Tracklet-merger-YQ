@@ -1,39 +1,28 @@
-# SAE stage template
-A starter for a SAE stage implementation.\
-\
-This repository will help you implementing a SAE pipeline stage by putting all the necessary infrastructure in place.
+# Tracklet Merger 
 
-# How-to start
+This repositry is developed based on https://github.com/starwit/sae-stage-template. 
 
-## Create repository from template
-Create your own repository using this template. It is good practice to prefix the repo name with `sae-` and use a concise name that describes what the stage does.\
-**Careful:** Check the repository owner, it defaults to your main user account.
+# Functionality
 
-## Check prerequisites
-In order to work with this repository, you need to ensure the following steps:
-- Install Poetry
-- Install Docker with compose plugin
-- Clone main SAE repository (you will most likely need a running SAE to do anything useful): https://github.com/starwit/starwit-awareness-engine
+The main goal of this repo is receive inter-camera processed Redis message from other edge-nodes and performance multi-camera/cross camera association.
 
-## Replace template name
-To make this repository entirely belong to your new shiny stage, you have to replace various forms of `mystage` in a few places. 
-Run `set_name.sh` and enter the various forms of your new name when prompted. The script will set everything up for you and then delete itself.
+# Paper
+
+This repo corresponds to the cross-camera assocation module in paper: https://papers.ssrn.com/sol3/papers.cfm?abstract_id=6626356
+
+# Set up 
+
+simply use poetry install to set up the enviornment. cofiguration are in settings.yaml, config all hyperparameters before using python main.py to run the whole pipeline.
+
+or use dockerfile to build docker images.
+
+# Other modules
+
+Other modules from the paper 
+
+---
+
+## License
+
+AGPLv3 — see [LICENSE](LICENSE).
 If you made a mistake either reclone the repository or run `git reset --hard && git clean -fd`
-
-## Setup
-- Run `poetry install`, this should install all necessary dependencies
-- Start docker compose version of the SAE (see here: https://github.com/starwit/starwit-awareness-engine/blob/main/docker-compose/README.md)
-- Run `poetry run python main.py`. If you see log messages like `Received SAE message from pipeline`, everything works as intended.
-
-## Start hacking :)
-
-# Helpful implementation hints
-
-## Configuration
-This template employs pydantic-settings for configuration handling. On startup, the following happens:
-1. Load defaults (see `config.py`)
-2. Read settings `settings.yaml` if it exists
-3. Search through environment variables if any match configuration parameters (converted to upper_snake_case, nested levels delimited by `__`), overwriting the corresponding setting
-4. Validate settings hierarchy if all necessary values are filled, otherwise Pydantic will throw a hopefully helpful error
-
-The `settings.template.yaml` should always reflect a correct and fully fledged settings structure to use as a starting point for users. 

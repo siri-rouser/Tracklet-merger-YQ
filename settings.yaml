@@ -12,7 +12,7 @@ last_process_interval: 60000 # in millsecond, 60s
 last_processing_frame: 8919
 
 sct_merging_config:
-  enable_sct_rematch: False
+  enable_sct_rematch: True
   max_frame_gap: 60
   max_pixel_distance_ratio: 0.25 # less than 1
   cosine_threshold: 0.2
@@ -49,7 +49,7 @@ merging_config:
   kde_threshold: 5e-5 # threshold for the kernel density estimation in CLM
   frame_window: 3000 # for MCT merging, the frame window is the time window for matching tracklets in different cameras
   overlap_frames: 1500 # for MCT merging, the overlap frames is the number of frames to overlap between two cameras
-  matching_algorithm: Hungarian # Matching algorithm: Greedy or Hungarian
+  matching_algorithm: Greedy # Matching algorithm: Greedy or Hungarian
 
   camera_pairs: 
     - [stream1, stream2]
